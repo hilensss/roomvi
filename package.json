@@ -1,0 +1,25 @@
+{
+  "name": "roomvi",
+  "version": "0.0.1",
+  "private": true,
+  "packageManager": "npm@11.12.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "typecheck": "turbo typecheck",
+    "db:generate": "npm run db:generate -w @roomvi/database",
+    "db:migrate": "npm run db:migrate -w @roomvi/database",
+    "db:studio": "npm run db:studio -w @roomvi/database",
+    "packages:build": "npm run build -w @roomvi/shared && npm run build -w @roomvi/database",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.0"
+  }
+}

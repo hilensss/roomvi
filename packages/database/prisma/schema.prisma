@@ -1,0 +1,327 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum SupplierStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SupplierProductRawStatus {
+  ACTIVE
+  OUT_OF_STOCK
+  REMOVED
+  ERROR
+}
+
+enum StockStatus {
+  IN_STOCK
+  OUT_OF_STOCK
+  PREORDER
+  UNKNOWN
+}
+
+enum ProductCategory {
+  SOFA
+  BED
+  ARMCHAIR
+  CHAIR
+  TABLE
+  COFFEE_TABLE
+  TV_STAND
+  WARDROBE
+  DRESSER
+  SHELF
+  DESK
+  LAMP
+  RUG
+  DECOR
+  MATTRESS
+  OTHER
+}
+
+enum RoomType {
+  LIVING_ROOM
+  BEDROOM
+  KITCHEN
+  KIDS_ROOM
+  OFFICE
+  HALLWAY
+  BATHROOM
+  STUDIO
+}
+
+enum InteriorStyle {
+  MODERN
+  MINIMALISM
+  SCANDI
+  LOFT
+  CLASSIC
+  NEOCLASSIC
+  JAPANDI
+  PROVENCE
+  ECO
+  HIGH_TECH
+}
+
+enum RoomProjectStatus {
+  DRAFT
+  READY_TO_GENERATE
+  GENERATING
+  GENERATED
+  SELECTED
+  ORDER_CREATED
+  ARCHIVED
+}
+
+enum GenerationJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELED
+}
+
+enum GenerationOwnerType {
+  USER
+  GUEST
+}
+
+enum GenerationProvider {
+  MOCK
+  MIDJOURNEY
+  STABLE_DIFFUSION
+}
+
+model User {
+  id             String          @id @default(uuid())
+  email          String          @unique
+  passwordHash   String
+  name           String?
+  phone          String?
+  role           UserRole        @default(USER)
+  refreshTokens  RefreshToken[]
+  guestSessions  GuestSession[]
+  roomProjects   RoomProject[]
+  generationJobs GenerationJob[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jti       String    @unique
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([jti])
+}
+
+model GuestSession {
+  id                      String          @id @default(uuid())
+  anonymousId             String          @unique @default(uuid())
+  ipHash                  String?
+  userAgentHash           String?
+  previewGenerationsUsed  Int             @default(0)
+  previewGenerationsLimit Int             @default(1)
+  firstSeenAt             DateTime        @default(now())
+  lastSeenAt              DateTime        @default(now())
+  expiresAt               DateTime
+  convertedUserId         String?
+  convertedAt             DateTime?
+  convertedUser           User?           @relation(fields: [convertedUserId], references: [id], onDelete: SetNull)
+  roomProjects            RoomProject[]
+  generationJobs          GenerationJob[]
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+
+  @@index([expiresAt])
+  @@index([convertedUserId])
+}
+
+model Supplier {
+  id          String               @id @default(uuid())
+  name        String
+  slug        String               @unique
+  status      SupplierStatus       @default(ACTIVE)
+  websiteUrl  String?
+  logoUrl     String?
+  productsRaw SupplierProductRaw[]
+  products    Product[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+model SupplierProductRaw {
+  id          String                   @id @default(uuid())
+  supplierId  String
+  supplier    Supplier                 @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  externalId  String
+  title       String?
+  url         String?
+  rawPayload  Json
+  payloadHash String
+  status      SupplierProductRawStatus @default(ACTIVE)
+  lastSeenAt  DateTime                 @default(now())
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  product     Product?
+
+  @@unique([supplierId, externalId])
+  @@index([supplierId])
+  @@index([externalId])
+  @@index([payloadHash])
+}
+
+model Product {
+  id                    String                 @id @default(uuid())
+  supplierId            String
+  supplier              Supplier               @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  rawProductId          String?                @unique
+  rawProduct            SupplierProductRaw?    @relation(fields: [rawProductId], references: [id], onDelete: SetNull)
+  externalId            String
+  title                 String
+  description           String?
+  category              ProductCategory
+  roomTypes             RoomType[]
+  styleTags             InteriorStyle[]
+  price                 Int
+  oldPrice              Int?
+  currency              String                 @default("RUB")
+  stockStatus           StockStatus            @default(UNKNOWN)
+  imageUrls             String[]
+  productUrl            String?
+  widthCm               Int?
+  heightCm              Int?
+  depthCm               Int?
+  material              String?
+  color                 String?
+  isActive              Boolean                @default(true)
+  isAiEligible          Boolean                @default(true)
+  designVariantProducts DesignVariantProduct[]
+  lastSyncedAt          DateTime               @default(now())
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+
+  @@unique([supplierId, externalId])
+  @@index([supplierId])
+  @@index([category])
+  @@index([stockStatus])
+  @@index([isActive])
+  @@index([isAiEligible])
+  @@index([price])
+}
+
+model RoomProject {
+  id                      String              @id @default(uuid())
+  ownerType               GenerationOwnerType
+  userId                  String?
+  user                    User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSessionId          String?
+  guestSession            GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  title                   String?
+  roomType                RoomType
+  style                   InteriorStyle
+  budgetMin               Int?
+  budgetMax               Int?
+  widthCm                 Int?
+  heightCm                Int?
+  depthCm                 Int?
+  sourceImageUrl          String?
+  status                  RoomProjectStatus   @default(DRAFT)
+  generationJobs          GenerationJob[]
+  designVariants          DesignVariant[]
+  selectedDesignVariantId String?
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@index([roomType])
+  @@index([style])
+  @@index([status])
+}
+
+model GenerationJob {
+  id             String              @id @default(uuid())
+  ownerType      GenerationOwnerType
+  userId         String?
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSessionId String?
+  guestSession   GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  roomProjectId  String
+  roomProject    RoomProject         @relation(fields: [roomProjectId], references: [id], onDelete: Cascade)
+  provider       GenerationProvider  @default(MOCK)
+  status         GenerationJobStatus @default(PENDING)
+  prompt         String?
+  negativePrompt String?
+  inputParams    Json?
+  errorMessage   String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  designVariants DesignVariant[]
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@index([roomProjectId])
+  @@index([status])
+  @@index([provider])
+}
+
+model DesignVariant {
+  id              String                 @id @default(uuid())
+  roomProjectId   String
+  roomProject     RoomProject            @relation(fields: [roomProjectId], references: [id], onDelete: Cascade)
+  generationJobId String
+  generationJob   GenerationJob          @relation(fields: [generationJobId], references: [id], onDelete: Cascade)
+  title           String?
+  description     String?
+  imageUrl        String
+  totalPrice      Int?
+  currency        String                 @default("RUB")
+  products        DesignVariantProduct[]
+  isSelected      Boolean                @default(false)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  @@index([roomProjectId])
+  @@index([generationJobId])
+  @@index([isSelected])
+}
+
+model DesignVariantProduct {
+  id              String        @id @default(uuid())
+  designVariantId String
+  designVariant   DesignVariant @relation(fields: [designVariantId], references: [id], onDelete: Cascade)
+  productId       String
+  product         Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  role            String?
+  x               Float?
+  y               Float?
+  productSnapshot Json
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([designVariantId, productId])
+  @@index([designVariantId])
+  @@index([productId])
+}
