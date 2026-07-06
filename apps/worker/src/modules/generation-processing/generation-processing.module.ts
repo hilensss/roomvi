@@ -3,12 +3,24 @@ import { CatalogReadModule } from '../catalog/catalog-read.module.js';
 import { GenerationProcessingService } from './generation-processing.service.js';
 import { MockAiProvider } from './providers/mock-ai.provider.js';
 import { PromptBuilderService } from './prompt-builder.service.js';
+import { CatalogReadService } from '../catalog/catalog-read.service.js';
+import { AiProviderFactory } from './providers/ai-provider.factory.js';
+import { YesAiNanoBananaProvider } from './providers/yes-ai-nano-banana.provider.js';
+import { StorageModule } from '../storage/storage.module.js';
+import { AiReferenceImageCacheService } from './services/ai-reference-image-cache.service.js';
+import { ProductMatchingService } from './product-matching.service.js';
+
 @Module({
-  imports: [CatalogReadModule],
+  imports: [CatalogReadModule, StorageModule],
   providers: [
     GenerationProcessingService,
     PromptBuilderService,
+    CatalogReadService,
     MockAiProvider,
+    AiReferenceImageCacheService,
+    YesAiNanoBananaProvider,
+    AiProviderFactory,
+    ProductMatchingService,
   ],
   exports: [GenerationProcessingService],
 })

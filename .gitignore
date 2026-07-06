@@ -6,3 +6,7 @@ dist
 coverage
 *.log
 packages/database/generated
+
+docs
+
+graphify-out

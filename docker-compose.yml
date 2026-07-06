@@ -15,6 +15,21 @@ services:
     restart: unless-stopped
     ports: ['6379:6379']
     volumes: [roomvi_redis_data:/data]
+  minio:
+    image: minio/minio:latest
+    container_name: roomvi_minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: roomvi
+      MINIO_ROOT_PASSWORD: roomvi_password
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    volumes:
+      - roomvi_minio_data:/data
+
 volumes:
   roomvi_postgres_data:
   roomvi_redis_data:
+  roomvi_minio_data:

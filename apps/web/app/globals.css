@@ -1,0 +1,192 @@
+@import 'tailwindcss';
+
+/*
+  Roomvi Design System
+  Tailwind v4 theme tokens.
+
+  Правило:
+  - цвета, радиусы, контейнеры, шрифтовые размеры, тени — через токены;
+  - в компонентах используем semantic utilities: bg-brand, text-ink, rounded-card;
+  - не пишем #ef8354 и style={{ fontSize: ... }} в JSX.
+*/
+
+@theme {
+  /* Colors */
+  --color-background: #ffffff;
+  --color-foreground: #2d3142;
+
+  --color-brand: #ef8354;
+  --color-brand-hover: #e97849;
+  --color-brand-soft: #fff0e9;
+
+  --color-ink: #2d3142;
+  --color-ink-soft: #4f5d75;
+  --color-ink-muted: #7b8494;
+
+  --color-line: #bfc0c0;
+  --color-line-soft: #e6e7e8;
+
+  --color-surface: #ffffff;
+  --color-surface-muted: #f7f5f2;
+  --color-surface-warm: #fbf3ee;
+
+  --color-dark: #2d3142;
+  --color-dark-soft: #363a4c;
+
+  /* Fonts */
+  --font-sans:
+    var(--font-roomvi-sans), Inter, ui-sans-serif, system-ui, sans-serif;
+
+  /* Text sizes */
+  --text-eyebrow: 0.75rem;
+  --text-eyebrow--line-height: 1rem;
+  --text-eyebrow--letter-spacing: 0.28em;
+  --text-eyebrow--font-weight: 600;
+
+  --text-body: 1rem;
+  --text-body--line-height: 1.65rem;
+
+  --text-body-lg: 1.125rem;
+  --text-body-lg--line-height: 1.9rem;
+
+  --text-section-title: clamp(2rem, 4vw, 3.5rem);
+  --text-section-title--line-height: 1.05;
+  --text-section-title--letter-spacing: -0.035em;
+  --text-section-title--font-weight: 650;
+
+  --text-section-subtitle: clamp(1.75rem, 3.4vw, 2.65rem);
+  --text-section-subtitle--line-height: 1.15;
+  --text-section-subtitle--letter-spacing: -0.025em;
+  --text-section-subtitle--font-weight: 560;
+
+  --text-hero: clamp(2rem, 9vw, 6rem);
+  --text-hero--line-height: 0.98;
+  --text-hero--letter-spacing: -0.055em;
+  --text-hero--font-weight: 680;
+
+  --text-card-title: 1.35rem;
+  --text-card-title--line-height: 1.25;
+  --text-card-title--font-weight: 650;
+
+  /* Radius */
+  --radius-xs: 0.75rem;
+  --radius-sm: 1rem;
+  --radius-md: 1.25rem;
+  --radius-lg: 1.75rem;
+  --radius-card: 2rem;
+  --radius-section: 3rem;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-soft: 0 16px 50px rgb(45 49 66 / 0.08);
+  --shadow-card: 0 22px 70px rgb(45 49 66 / 0.1);
+  --shadow-float: 0 30px 90px rgb(45 49 66 / 0.18);
+
+  /* Spacing */
+  --spacing-container: 1180px;
+  --spacing-container-wide: 1440px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  img {
+    max-width: 100%;
+    display: block;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 32%, transparent);
+  }
+}
+
+@layer components {
+  .rv-container {
+    width: min(100% - 2rem, var(--spacing-container));
+    margin-inline: auto;
+  }
+
+  .rv-container-wide {
+    width: min(100% - 2rem, var(--spacing-container-wide));
+    margin-inline: auto;
+    padding: 0px 1rem;
+  }
+
+  @media (min-width: 1080px) {
+    .rv-container-wide {
+      padding: 0 100px;
+    }
+  }
+
+  .rv-eyebrow {
+    font-size: var(--text-eyebrow);
+    line-height: var(--text-eyebrow--line-height);
+    letter-spacing: var(--text-eyebrow--letter-spacing);
+    font-weight: var(--text-eyebrow--font-weight);
+    text-transform: uppercase;
+    color: var(--color-brand);
+  }
+
+  .rv-focus-ring {
+    outline: none;
+  }
+
+  .rv-focus-ring:focus-visible {
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-brand) 20%, transparent);
+  }
+
+  .rv-input {
+    width: 100%;
+    border-radius: var(--radius-md);
+    border: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+    background: white;
+    padding: 0.75rem 1rem;
+    color: var(--color-ink);
+    outline: none;
+    transition:
+      border-color 150ms ease,
+      box-shadow 150ms ease;
+  }
+
+  .rv-input:focus {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 4px
+      color-mix(in srgb, var(--color-brand) 14%, transparent);
+  }
+
+  .rv-input[aria-invalid='true'] {
+    border-color: var(--color-brand);
+  }
+}

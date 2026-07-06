@@ -6,10 +6,12 @@
   "scripts": {
     "dev": "nest start --watch",
     "build": "nest build",
+    "test": "npm run build && node --test test/*.test.mjs",
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1062.0",
     "@nestjs/bullmq": "^11.0.0",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.0",
@@ -20,7 +22,8 @@
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

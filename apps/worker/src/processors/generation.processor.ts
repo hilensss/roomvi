@@ -20,9 +20,18 @@ export class GenerationProcessor extends WorkerHost {
       this.logger.warn(`Unknown job name: ${job.name}`);
       return;
     }
-    this.logger.log(`Processing generation job ${job.data.generationJobId}`);
-    return this.generationProcessingService.processGenerationJob(
+    this.logger.log(
+      `BullMQ generation job started: bullJobId=${job.id}, generationJobId=${job.data.generationJobId}, attempt=${job.attemptsMade + 1}`,
+    );
+
+    const result = await this.generationProcessingService.processGenerationJob(
       job.data.generationJobId,
     );
+
+    this.logger.log(
+      `BullMQ generation job finished: bullJobId=${job.id}, generationJobId=${job.data.generationJobId}`,
+    );
+
+    return result;
   }
 }

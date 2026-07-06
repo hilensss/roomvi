@@ -102,6 +102,7 @@ enum GenerationProvider {
   MOCK
   MIDJOURNEY
   STABLE_DIFFUSION
+  NANO_BANANA
 }
 
 model User {
@@ -117,6 +118,11 @@ model User {
   generationJobs GenerationJob[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+
+  files File[]
+
+  carts Cart[]
+  orders Order[]
 }
 
 model RefreshToken {
@@ -152,8 +158,13 @@ model GuestSession {
   createdAt               DateTime        @default(now())
   updatedAt               DateTime        @updatedAt
 
+  files File[]
+
   @@index([expiresAt])
   @@index([convertedUserId])
+  
+  carts Cart[]
+  orders Order[]
 }
 
 model Supplier {
@@ -167,6 +178,8 @@ model Supplier {
   products    Product[]
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
+
+  supplierOrders SupplierOrder[]
 }
 
 model SupplierProductRaw {
@@ -227,6 +240,9 @@ model Product {
   @@index([isActive])
   @@index([isAiEligible])
   @@index([price])
+
+  cartItems CartItem[]
+  orderItems OrderItem[]
 }
 
 model RoomProject {
@@ -257,6 +273,8 @@ model RoomProject {
   @@index([roomType])
   @@index([style])
   @@index([status])
+
+  cartItems CartItem[]
 }
 
 model GenerationJob {
@@ -270,6 +288,11 @@ model GenerationJob {
   roomProject    RoomProject         @relation(fields: [roomProjectId], references: [id], onDelete: Cascade)
   provider       GenerationProvider  @default(MOCK)
   status         GenerationJobStatus @default(PENDING)
+
+  externalJobId  String?
+  progress       Int                 @default(0)
+  currentStep    String?
+
   prompt         String?
   negativePrompt String?
   inputParams    Json?
@@ -306,6 +329,8 @@ model DesignVariant {
   @@index([roomProjectId])
   @@index([generationJobId])
   @@index([isSelected])
+  
+  cartItems CartItem[]
 }
 
 model DesignVariantProduct {
@@ -324,4 +349,234 @@ model DesignVariantProduct {
   @@unique([designVariantId, productId])
   @@index([designVariantId])
   @@index([productId])
+}
+
+enum FileOwnerType {
+  USER
+  GUEST
+}
+
+model File {
+  id String @id @default(uuid())
+
+  ownerType FileOwnerType
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  guestSessionId String?
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+
+  originalName String
+  fileName     String
+
+  mimeType  String
+  sizeBytes Int
+
+  storageKey String
+  url        String
+
+  purpose String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@index([ownerType])
+  @@index([purpose])
+}
+
+enum CartStatus {
+  ACTIVE
+  ORDER_CREATED
+  ABANDONED
+}
+
+enum CartItemSource {
+  CATALOG
+  DESIGN_PROJECT
+}
+
+model Cart {
+  id String @id @default(uuid())
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  guestSessionId String?
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+
+  status CartStatus @default(ACTIVE)
+
+  totalAmount Int @default(0)
+  currency    String @default("RUB")
+
+  items CartItem[]
+  order Order?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@index([status])
+}
+
+model CartItem {
+  id String @id @default(uuid())
+
+  cartId String
+  cart   Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  supplierId String
+
+  source CartItemSource @default(CATALOG)
+  roomProjectId String?
+  roomProject   RoomProject? @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
+
+  designVariantId String?
+  designVariant   DesignVariant? @relation(fields: [designVariantId], references: [id], onDelete: SetNull)
+
+  quantity Int @default(1)
+
+  priceSnapshot        Int
+  titleSnapshot        String
+  imageSnapshot        String?
+  availabilitySnapshot String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+  @@index([productId])
+  @@index([supplierId])
+}
+
+enum OrderStatus {
+  CREATED
+  PROCESSING
+  COMPLETED
+  CANCELED
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum SupplierOrderStatus {
+  PENDING
+  MANUAL_PROCESSING
+  SENT
+  CONFIRMED
+  FAILED
+  REJECTED
+  CANCELED
+}
+
+model Order {
+  id String @id @default(uuid())
+
+  userId String?
+  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  guestSessionId String?
+  guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+
+  cartId String @unique
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Restrict)
+
+  status        OrderStatus   @default(CREATED)
+  paymentStatus PaymentStatus @default(NOT_REQUIRED)
+
+  totalAmount Int
+  currency    String @default("RUB")
+
+  customerName  String
+  customerPhone String
+  customerEmail String?
+
+  deliveryAddress String
+  deliveryDate    DateTime?
+  comment         String?
+
+  items          OrderItem[]
+  supplierOrders SupplierOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([guestSessionId])
+  @@index([cartId])
+  @@index([status])
+}
+
+model OrderItem {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  supplierId String
+
+  externalProductId String
+
+  source CartItemSource @default(CATALOG)
+
+  roomProjectId String?
+  designVariantId String?
+
+  quantity Int
+
+  priceSnapshot Int
+  titleSnapshot String
+  imageSnapshot String?
+  availabilitySnapshot String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([supplierId])
+  @@index([source])
+  @@index([roomProjectId])
+  @@index([designVariantId])
+}
+
+model SupplierOrder {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  status SupplierOrderStatus @default(MANUAL_PROCESSING)
+
+  externalOrderId String?
+
+  payload         Json?
+  responsePayload Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([orderId, supplierId])
+  @@index([orderId])
+  @@index([supplierId])
+  @@index([status])
 }

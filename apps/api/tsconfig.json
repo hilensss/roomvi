@@ -5,9 +5,11 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    "declaration": false,
+    "declarationMap": false,
     "outDir": "./dist",
     "rootDir": "./src",
-    "incremental": true,
+    "incremental": false,
     "strictPropertyInitialization": false
   },
   "include": ["src/**/*.ts"],

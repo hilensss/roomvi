@@ -7,6 +7,13 @@ import { GenerationQueueModule } from './modules/generation-queue/generation-que
 import { GuestModule } from './modules/guest/guest.module.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { UsersModule } from './modules/users/users.module.js';
+import { StorageModule } from './modules/storage/storage.module.js';
+import { FilesModule } from './modules/files/files.module.js';
+import { DesignVariantsModule } from './modules/design-variants/design-variants.module.js';
+import { CartModule } from './modules/cart/cart.module.js';
+import { OrdersModule } from './modules/orders/orders.module.js';
+import { AdminModule } from './modules/admin/admin.module.js';
+import { ProfileModule } from './modules/profile/profile.module.js';
 
 @Module({
   imports: [
@@ -21,6 +28,13 @@ import { UsersModule } from './modules/users/users.module.js';
     CatalogModule,
     GenerationQueueModule,
     GenerationModule,
+    StorageModule,
+    FilesModule,
+    DesignVariantsModule,
+    CartModule,
+    OrdersModule,
+    AdminModule,
+    ProfileModule,
   ],
 })
 export class AppModule {}

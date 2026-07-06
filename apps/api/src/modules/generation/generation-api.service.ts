@@ -57,7 +57,7 @@ export class GenerationApiService {
         userId: owner.userId,
         guestSessionId: owner.guestSessionId,
         roomProjectId: roomProject.id,
-        provider: GenerationProvider.MOCK,
+        provider: this.getDefaultGenerationProvider(),
         status: GenerationJobStatus.PENDING,
         inputParams: { ...dto } as Prisma.InputJsonObject,
         startedAt: null,
@@ -155,5 +155,14 @@ export class GenerationApiService {
   }
   private createDefaultProjectTitle(dto: CreateGenerationDto) {
     return `${dto.roomType} · ${dto.style}`;
+  }
+
+  private getDefaultGenerationProvider(): GenerationProvider {
+    const value = process.env.GENERATION_PROVIDER ?? 'MOCK';
+
+    if (value === 'NANO_BANANA') return GenerationProvider.NANO_BANANA;
+    if (value === 'MOCK') return GenerationProvider.MOCK;
+
+    throw new Error(`Unsupported GENERATION_PROVIDER: ${value}`);
   }
 }

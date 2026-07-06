@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InteriorStyle, Prisma, RoomType, StockStatus } from '@roomvi/database';
 import { PrismaService } from '../prisma/prisma.service.js';
+
 @Injectable()
 export class CatalogReadService {
   constructor(private readonly prisma: PrismaService) {}

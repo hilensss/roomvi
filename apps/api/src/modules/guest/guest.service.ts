@@ -1,7 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { CookieOptions, Request, Response } from 'express';
-import { GuestSession } from '@roomvi/database';
+import {
+  FileOwnerType,
+  GenerationOwnerType,
+  GuestSession,
+} from '@roomvi/database';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { GUEST_COOKIE_NAMES } from './constants/guest-cookies.constants.js';
 import { GuestSessionResponse } from './types/guest-session-response.type.js';
@@ -42,32 +51,105 @@ export class GuestService {
     anonymousId: string,
   ): Promise<GuestSession> {
     const session = await this.findValidSessionByAnonymousId(anonymousId);
-    if (!session) throw new Error('Guest session not found or expired');
-    if (session.previewGenerationsUsed >= session.previewGenerationsLimit)
-      throw new Error('Guest preview generation limit exceeded');
+
+    if (!session) {
+      throw new NotFoundException('Guest session not found or expired');
+    }
+
+    if (session.previewGenerationsUsed >= session.previewGenerationsLimit) {
+      throw new HttpException(
+        {
+          code: 'GUEST_GENERATION_LIMIT_EXCEEDED',
+          message: 'Guest preview generation limit exceeded',
+          previewGenerationsUsed: session.previewGenerationsUsed,
+          previewGenerationsLimit: session.previewGenerationsLimit,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     return this.prisma.guestSession.update({
-      where: { id: session.id },
+      where: {
+        id: session.id,
+      },
       data: {
-        previewGenerationsUsed: { increment: 1 },
+        previewGenerationsUsed: {
+          increment: 1,
+        },
         lastSeenAt: new Date(),
       },
     });
   }
+
   async attachGuestSessionToUser(
     anonymousId: string | undefined,
     userId: string,
-  ) {
-    if (!anonymousId) return;
+  ): Promise<void> {
+    if (!anonymousId) {
+      return;
+    }
+
     const session = await this.findValidSessionByAnonymousId(anonymousId);
-    if (!session) return;
-    await this.prisma.guestSession.update({
-      where: { id: session.id },
-      data: {
-        convertedUserId: userId,
-        convertedAt: new Date(),
-        lastSeenAt: new Date(),
-      },
-    });
+
+    if (!session) {
+      return;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.roomProject.updateMany({
+        where: {
+          guestSessionId: session.id,
+          userId: null,
+        },
+        data: {
+          userId,
+          ownerType: GenerationOwnerType.USER,
+        },
+      }),
+
+      this.prisma.generationJob.updateMany({
+        where: {
+          guestSessionId: session.id,
+          userId: null,
+        },
+        data: {
+          userId,
+          ownerType: GenerationOwnerType.USER,
+        },
+      }),
+
+      this.prisma.cart.updateMany({
+        where: {
+          guestSessionId: session.id,
+          userId: null,
+        },
+        data: {
+          userId,
+        },
+      }),
+
+      this.prisma.file.updateMany({
+        where: {
+          guestSessionId: session.id,
+          userId: null,
+        },
+        data: {
+          userId,
+          ownerType: FileOwnerType.USER,
+        },
+      }),
+
+      this.prisma.guestSession.update({
+        where: {
+          id: session.id,
+        },
+        data: {
+          convertedUserId: userId,
+          convertedAt: new Date(),
+          lastSeenAt: new Date(),
+        },
+      }),
+    ]);
   }
   clearGuestCookie(res: Response) {
     res.clearCookie(GUEST_COOKIE_NAMES.guestId, this.getGuestCookieOptions());

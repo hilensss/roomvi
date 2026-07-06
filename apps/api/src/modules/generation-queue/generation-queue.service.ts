@@ -14,7 +14,7 @@ export class GenerationQueueService {
       GENERATION_QUEUE_JOBS.PROCESS_GENERATION,
       { generationJobId },
       {
-        attempts: 3,
+        attempts: 1, // Provider retries are scoped to each variant in the worker.
         backoff: { type: 'exponential', delay: 5000 },
         removeOnComplete: { age: 86400, count: 1000 },
         removeOnFail: { age: 604800, count: 5000 },

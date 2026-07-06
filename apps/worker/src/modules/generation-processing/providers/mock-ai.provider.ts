@@ -7,7 +7,7 @@ import {
 } from './ai-provider.interface.js';
 @Injectable()
 export class MockAiProvider implements AiProvider {
-  providerName = 'MOCK';
+  providerName = 'MOCK' as const;
   async generateDesigns(
     input: GenerateDesignInput,
   ): Promise<GeneratedDesignVariant[]> {
