@@ -104,6 +104,12 @@ function createHarness(generateDesigns, options = {}) {
   };
   const promptBuilder = {
     buildPrompt: (_project, products) => `prompt:${products[0].id}`,
+    buildPromptWithinLimit: (_project, products) => ({
+      prompt: `prompt:${products[0].id}`,
+      mode: 'full',
+      includedProductsCount: products.length,
+      totalProductsCount: products.length,
+    }),
     buildNegativePrompt: () => 'negative prompt',
   };
   const aiProviderFactory = {

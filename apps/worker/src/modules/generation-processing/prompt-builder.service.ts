@@ -18,6 +18,13 @@ type PromptInput = {
   sourceImageUrl?: string;
 };
 
+type PromptWithinLimitResult = {
+  prompt: string;
+  mode: 'full' | 'compact';
+  includedProductsCount: number;
+  totalProductsCount: number;
+};
+
 const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   SOFA: 'sofa / couch for a living room seating area',
   ARMCHAIR: 'armchair / lounge chair',
@@ -36,6 +43,107 @@ const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
   DECOR: 'small decor item',
   OTHER: 'other catalog item',
 };
+
+const COMPACT_DESCRIPTION_MAX_LENGTH = 120;
+
+const ROOM_HERO_CATEGORY: Partial<Record<RoomType, ProductCategory>> = {
+  LIVING_ROOM: ProductCategory.SOFA,
+  BEDROOM: ProductCategory.BED,
+  OFFICE: ProductCategory.DESK,
+  KITCHEN: ProductCategory.TABLE,
+  KIDS_ROOM: ProductCategory.BED,
+  HALLWAY: ProductCategory.WARDROBE,
+  STUDIO: ProductCategory.SOFA,
+};
+
+const ROOM_COMPACT_CATEGORY_PRIORITY: Partial<
+  Record<RoomType, ProductCategory[]>
+> = {
+  LIVING_ROOM: [
+    ProductCategory.SOFA,
+    ProductCategory.COFFEE_TABLE,
+    ProductCategory.TV_STAND,
+    ProductCategory.RUG,
+    ProductCategory.SHELF,
+    ProductCategory.LAMP,
+    ProductCategory.ARMCHAIR,
+    ProductCategory.DRESSER,
+    ProductCategory.DECOR,
+  ],
+  STUDIO: [
+    ProductCategory.SOFA,
+    ProductCategory.COFFEE_TABLE,
+    ProductCategory.TV_STAND,
+    ProductCategory.RUG,
+    ProductCategory.SHELF,
+    ProductCategory.LAMP,
+    ProductCategory.ARMCHAIR,
+    ProductCategory.DESK,
+    ProductCategory.DECOR,
+  ],
+  BEDROOM: [
+    ProductCategory.BED,
+    ProductCategory.WARDROBE,
+    ProductCategory.DRESSER,
+    ProductCategory.LAMP,
+    ProductCategory.RUG,
+    ProductCategory.DECOR,
+    ProductCategory.ARMCHAIR,
+    ProductCategory.SHELF,
+    ProductCategory.DESK,
+  ],
+  KITCHEN: [
+    ProductCategory.TABLE,
+    ProductCategory.CHAIR,
+    ProductCategory.LAMP,
+    ProductCategory.SHELF,
+    ProductCategory.DECOR,
+  ],
+  OFFICE: [
+    ProductCategory.DESK,
+    ProductCategory.CHAIR,
+    ProductCategory.LAMP,
+    ProductCategory.SHELF,
+    ProductCategory.RUG,
+    ProductCategory.DECOR,
+  ],
+  KIDS_ROOM: [
+    ProductCategory.BED,
+    ProductCategory.DESK,
+    ProductCategory.CHAIR,
+    ProductCategory.WARDROBE,
+    ProductCategory.LAMP,
+    ProductCategory.RUG,
+    ProductCategory.SHELF,
+    ProductCategory.DECOR,
+  ],
+  HALLWAY: [
+    ProductCategory.WARDROBE,
+    ProductCategory.DRESSER,
+    ProductCategory.SHELF,
+    ProductCategory.LAMP,
+    ProductCategory.DECOR,
+  ],
+};
+
+const FALLBACK_COMPACT_CATEGORY_PRIORITY = [
+  ProductCategory.SOFA,
+  ProductCategory.BED,
+  ProductCategory.TABLE,
+  ProductCategory.DESK,
+  ProductCategory.COFFEE_TABLE,
+  ProductCategory.TV_STAND,
+  ProductCategory.WARDROBE,
+  ProductCategory.DRESSER,
+  ProductCategory.SHELF,
+  ProductCategory.CHAIR,
+  ProductCategory.ARMCHAIR,
+  ProductCategory.RUG,
+  ProductCategory.LAMP,
+  ProductCategory.DECOR,
+  ProductCategory.MATTRESS,
+  ProductCategory.OTHER,
+];
 
 @Injectable()
 export class PromptBuilderService {
@@ -104,6 +212,77 @@ export class PromptBuilderService {
       .join('\n');
   }
 
+  buildPromptWithinLimit(
+    dto: PromptInput,
+    products: Product[],
+    maxLength = 9500,
+  ): PromptWithinLimitResult {
+    const fullPrompt = this.buildPrompt(dto, products);
+
+    if (fullPrompt.length <= maxLength) {
+      return {
+        prompt: fullPrompt,
+        mode: 'full',
+        includedProductsCount: products.length,
+        totalProductsCount: products.length,
+      };
+    }
+
+    const compactPrompt = this.buildCompactPrompt(dto, products, products);
+
+    if (compactPrompt.length <= maxLength) {
+      return {
+        prompt: compactPrompt,
+        mode: 'compact',
+        includedProductsCount: products.length,
+        totalProductsCount: products.length,
+      };
+    }
+
+    const prioritizedProducts = this.sortProductsByVisualPriority(
+      dto.roomType,
+      products,
+    );
+    const heroProduct = this.getHeroProduct(dto.roomType, products);
+    let includedProducts: Product[] = [];
+    let limitedPrompt = this.buildCompactPrompt(dto, products, includedProducts);
+
+    if (limitedPrompt.length > maxLength) {
+      throw new Error(
+        `YES AI prompt cannot be reduced below ${maxLength} characters`,
+      );
+    }
+
+    for (const product of prioritizedProducts) {
+      const candidateProducts = [...includedProducts, product];
+      const candidatePrompt = this.buildCompactPrompt(
+        dto,
+        products,
+        candidateProducts,
+      );
+
+      if (candidatePrompt.length > maxLength) {
+        if (heroProduct && product === heroProduct) {
+          throw new Error(
+            `YES AI prompt cannot be reduced below ${maxLength} characters`,
+          );
+        }
+
+        break;
+      }
+
+      includedProducts = candidateProducts;
+      limitedPrompt = candidatePrompt;
+    }
+
+    return {
+      prompt: limitedPrompt,
+      mode: 'compact',
+      includedProductsCount: includedProducts.length,
+      totalProductsCount: products.length,
+    };
+  }
+
   buildNegativePrompt(dto?: PromptInput, products: Product[] = []) {
     const productCategories = this.getProductCategories(products);
 
@@ -145,6 +324,80 @@ export class PromptBuilderService {
     ].join(', ');
   }
 
+  private buildCompactPrompt(
+    dto: PromptInput,
+    allProducts: Product[],
+    includedProducts: Product[],
+  ) {
+    const productCategories = this.getProductCategories(includedProducts);
+    const productLines = this.buildCompactProductLines(includedProducts);
+    const styleInstructions = this.buildStyleInstructions(dto.style);
+    const roomInstructions = this.buildRoomInstructions(dto, productCategories);
+    const catalogRules = this.buildCatalogRules(
+      dto,
+      allProducts,
+      productCategories,
+    );
+    const compositionRules = this.buildCompositionRules(
+      dto.roomType,
+      productCategories,
+    );
+    const missingCategoryRules = this.buildMissingCategoryRules(
+      dto.roomType,
+      productCategories,
+    );
+
+    return [
+      'You are an expert interior designer and photorealistic interior renderer for an online furniture marketplace.',
+      'Your task is to create a beautiful, realistic, commercially attractive room design based on the source room and the selected catalog products.',
+      '',
+      'ROOM BRIEF:',
+      `Room type: ${dto.roomType}.`,
+      `Interior style: ${dto.style}.`,
+      dto.title ? `Project title: ${dto.title}.` : null,
+      dto.budgetMax ? `Maximum furniture budget: ${dto.budgetMax} RUB.` : null,
+      dto.widthCm && dto.depthCm
+        ? `Room footprint: ${dto.widthCm} cm width x ${dto.depthCm} cm depth.`
+        : null,
+      dto.heightCm ? `Ceiling height: ${dto.heightCm} cm.` : null,
+      dto.sourceImageUrl
+        ? 'Use the source room image as a strict reference for layout, geometry, camera angle, windows, doors, walls, floor, ceiling and proportions.'
+        : 'Create a realistic room layout with natural proportions and believable camera perspective.',
+      '',
+      'STYLE DIRECTION:',
+      ...styleInstructions,
+      '',
+      'ROOM-SPECIFIC DESIGN RULES:',
+      ...roomInstructions,
+      '',
+      'SELECTED CATALOG PRODUCTS:',
+      productLines ||
+        'No catalog products were provided. Keep the room minimal and do not invent major furniture.',
+      '',
+      'COMPACT CATALOG VISUAL RULES:',
+      'Preserve category, approximate silhouette, color, material and scale for every listed product.',
+      'Do not replace any listed product with another category.',
+      'Do not invent extra products beyond the compact catalog list.',
+      '',
+      'CATALOG PRODUCT CONTROL RULES:',
+      ...catalogRules,
+      '',
+      'SCENE COMPOSITION:',
+      ...compositionRules,
+      '',
+      'MISSING CATEGORY RESTRICTIONS:',
+      ...missingCategoryRules,
+      '',
+      'FINAL QUALITY TARGET:',
+      'The image must look like a premium real-estate / interior design photo, not a collage and not a product catalog grid.',
+      'Use soft natural light, realistic shadows, correct scale, coherent materials, clean styling and tasteful spacing.',
+      'The design may be minimal if the selected catalog set is small; empty space is better than inventing unlisted furniture.',
+      'Do not place product labels, text annotations, arrows, prices, brand labels or measurement text in the image.',
+    ]
+      .filter(Boolean)
+      .join('\n');
+  }
+
   private buildProductLines(products: Product[]) {
     return products
       .slice(0, 12)
@@ -176,6 +429,98 @@ export class PromptBuilderService {
           .join('; ');
       })
       .join('\n');
+  }
+
+  private buildCompactProductLines(products: Product[]) {
+    return products
+      .map((product, index) => {
+        const categoryLabel = PRODUCT_CATEGORY_LABELS[product.category];
+        const compactDescription = product.description
+          ? this.truncateCompactDescription(
+              product.description,
+              COMPACT_DESCRIPTION_MAX_LENGTH,
+            )
+          : null;
+
+        return [
+          `${index + 1}. CATEGORY=${product.category} (${categoryLabel})`,
+          `TITLE=${product.title}`,
+          product.color && product.color !== 'Не указан'
+            ? `COLOR=${product.color}`
+            : null,
+          product.material ? `MATERIAL=${product.material}` : null,
+          product.widthCm && product.depthCm && product.heightCm
+            ? `SIZE=${product.widthCm}x${product.depthCm}x${product.heightCm} cm`
+            : null,
+          compactDescription ? `DESCRIPTION=${compactDescription}` : null,
+          `VISUAL_RULE=Use as listed ${product.category} role.`,
+        ]
+          .filter(Boolean)
+          .join('; ');
+      })
+      .join('\n');
+  }
+
+  private truncateCompactDescription(value: string, maxLength: number) {
+    const compactValue = value.replace(/\s+/g, ' ').trim();
+
+    if (compactValue.length <= maxLength) return compactValue;
+    if (maxLength <= 3) return compactValue.substring(0, maxLength);
+
+    return `${compactValue.substring(0, maxLength - 3).trimEnd()}...`;
+  }
+
+  private sortProductsByVisualPriority(
+    roomType: RoomType,
+    products: Product[],
+  ) {
+    const heroProduct = this.getHeroProduct(roomType, products);
+    const originalIndexById = new Map(
+      products.map((product, index) => [product.id, index]),
+    );
+    const categoryPriority =
+      ROOM_COMPACT_CATEGORY_PRIORITY[roomType] ??
+      FALLBACK_COMPACT_CATEGORY_PRIORITY;
+
+    return [...products].sort((left, right) => {
+      if (left === heroProduct) return -1;
+      if (right === heroProduct) return 1;
+
+      const leftPriority = this.getCategoryPriority(
+        categoryPriority,
+        left.category,
+      );
+      const rightPriority = this.getCategoryPriority(
+        categoryPriority,
+        right.category,
+      );
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return (
+        (originalIndexById.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
+        (originalIndexById.get(right.id) ?? Number.MAX_SAFE_INTEGER)
+      );
+    });
+  }
+
+  private getHeroProduct(roomType: RoomType, products: Product[]) {
+    const heroCategory = ROOM_HERO_CATEGORY[roomType];
+
+    if (!heroCategory) return undefined;
+
+    return products.find((product) => product.category === heroCategory);
+  }
+
+  private getCategoryPriority(
+    categoryPriority: ProductCategory[],
+    category: ProductCategory,
+  ) {
+    const index = categoryPriority.indexOf(category);
+
+    return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
   }
 
   private buildCatalogRules(

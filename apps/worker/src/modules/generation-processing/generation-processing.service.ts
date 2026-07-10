@@ -193,7 +193,7 @@ export class GenerationProcessingService {
           );
         }
 
-        const prompt = this.promptBuilder.buildPrompt(
+        const promptResult = this.promptBuilder.buildPromptWithinLimit(
           {
             roomType: project.roomType,
             style: project.style,
@@ -206,6 +206,12 @@ export class GenerationProcessingService {
             sourceImageUrl: project.sourceImageUrl ?? undefined,
           },
           products,
+          9500,
+        );
+        const prompt = promptResult.prompt;
+
+        this.logger.log(
+          `Generation prompt prepared: mode=${promptResult.mode}, length=${prompt.length}, productsIncluded=${promptResult.includedProductsCount}/${promptResult.totalProductsCount}`,
         );
 
         const negativePrompt = this.promptBuilder.buildNegativePrompt(
