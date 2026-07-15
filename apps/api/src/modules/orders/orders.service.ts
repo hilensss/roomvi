@@ -20,7 +20,10 @@ import { JwtUser } from '../auth/types/jwt-user.type.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { OrderQueryDto } from './dto/order-query.dto.js';
-import { assertOrderCanBeCancelled } from './order-state.js';
+import {
+  assertOrderCanBeCancelled,
+  assertOrderStatusTransition,
+} from './order-state.js';
 import { runSerializableTransaction } from './serializable-transaction.js';
 
 const POSTGRES_INT_MAX = 2_147_483_647;
@@ -328,44 +331,41 @@ export class OrdersService {
         throw new NotFoundException('Order not found');
       }
 
-      if (
-        order.status !== OrderStatus.PENDING_PAYMENT &&
-        order.status !== OrderStatus.CONFIRMED
-      ) {
-        throw new ConflictException('Order can no longer be cancelled');
+      assertOrderStatusTransition(order.status, OrderStatus.CANCELLED);
+
+      if (order.status !== OrderStatus.CANCELLED) {
+        assertOrderCanBeCancelled(
+          order.paymentStatus,
+          order.fulfillmentStatus,
+        );
+
+        const cancelledAt = new Date();
+        const updated = await tx.order.updateMany({
+          where: {
+            id: orderId,
+            userId: context.user.userId,
+            status: order.status,
+            paymentStatus: order.paymentStatus,
+            fulfillmentStatus: FulfillmentStatus.NOT_STARTED,
+          },
+          data: {
+            status: OrderStatus.CANCELLED,
+            cancelledAt,
+            ...(order.paymentStatus === PaymentStatus.PENDING
+              ? { paymentStatus: PaymentStatus.CANCELLED }
+              : {}),
+          },
+        });
+
+        if (updated.count !== 1) {
+          throw new ConflictException('Order changed during cancellation');
+        }
+
+        await tx.payment.updateMany({
+          where: { orderId, status: PaymentStatus.PENDING },
+          data: { status: PaymentStatus.CANCELLED },
+        });
       }
-
-      assertOrderCanBeCancelled(
-        order.paymentStatus,
-        order.fulfillmentStatus,
-      );
-
-      const cancelledAt = new Date();
-      const updated = await tx.order.updateMany({
-        where: {
-          id: orderId,
-          userId: context.user.userId,
-          status: order.status,
-          paymentStatus: order.paymentStatus,
-          fulfillmentStatus: FulfillmentStatus.NOT_STARTED,
-        },
-        data: {
-          status: OrderStatus.CANCELLED,
-          cancelledAt,
-          ...(order.paymentStatus === PaymentStatus.PENDING
-            ? { paymentStatus: PaymentStatus.CANCELLED }
-            : {}),
-        },
-      });
-
-      if (updated.count !== 1) {
-        throw new ConflictException('Order changed during cancellation');
-      }
-
-      await tx.payment.updateMany({
-        where: { orderId, status: PaymentStatus.PENDING },
-        data: { status: PaymentStatus.CANCELLED },
-      });
 
       const updatedOrder = await tx.order.findFirst({
         where: { id: orderId, userId: context.user.userId },

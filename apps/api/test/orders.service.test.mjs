@@ -395,7 +395,6 @@ test('cancellation cancels pending order and payment rows in one transaction', a
 
 test('cancellation rejects disallowed order, payment, and fulfillment states', async () => {
   for (const state of [
-    { status: 'PROCESSING', paymentStatus: 'PENDING', fulfillmentStatus: 'NOT_STARTED' },
     { status: 'CONFIRMED', paymentStatus: 'PAID', fulfillmentStatus: 'NOT_STARTED' },
     { status: 'CONFIRMED', paymentStatus: 'PENDING', fulfillmentStatus: 'PROCUREMENT' },
   ]) {
@@ -415,6 +414,63 @@ test('cancellation rejects disallowed order, payment, and fulfillment states', a
       (error) => error instanceof ConflictException,
     );
   }
+});
+
+test('client cancellation follows the shared PROCESSING to CANCELLED transition', async () => {
+  let reads = 0;
+  let updateArgs;
+  const tx = {
+    order: {
+      findFirst: async () => {
+        reads += 1;
+        return orderRecord({
+          status: reads === 1 ? 'PROCESSING' : 'CANCELLED',
+          paymentStatus: reads === 1 ? 'PENDING' : 'CANCELLED',
+          fulfillmentStatus: 'NOT_STARTED',
+          cancelledAt: reads === 1 ? null : now,
+        });
+      },
+      updateMany: async (args) => {
+        updateArgs = args;
+        return { count: 1 };
+      },
+    },
+    payment: { updateMany: async () => ({ count: 1 }) },
+  };
+  const service = new OrdersService({
+    $transaction: async (callback) => callback(tx),
+  });
+
+  const result = await service.cancelOrder('order-1', context);
+
+  assert.equal(result.status, 'CANCELLED');
+  assert.equal(updateArgs.where.status, 'PROCESSING');
+});
+
+test('repeated client cancellation is an idempotent no-op', async () => {
+  const tx = {
+    order: {
+      findFirst: async () =>
+        orderRecord({
+          status: 'CANCELLED',
+          paymentStatus: 'CANCELLED',
+          fulfillmentStatus: 'NOT_STARTED',
+          cancelledAt: now,
+        }),
+      updateMany: async () => assert.fail('cancelled order was rewritten'),
+    },
+    payment: {
+      updateMany: async () => assert.fail('cancelled payment was rewritten'),
+    },
+  };
+  const service = new OrdersService({
+    $transaction: async (callback) => callback(tx),
+  });
+
+  const result = await service.cancelOrder('order-1', context);
+
+  assert.equal(result.status, 'CANCELLED');
+  assert.equal(result.cancelledAt, now);
 });
 
 test('serializable transaction retries one P2034 conflict before succeeding', async () => {
