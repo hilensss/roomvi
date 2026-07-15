@@ -260,6 +260,78 @@ test('checkout uses current server product data and mutates only through the tra
   assert.equal('supplierOrders' in result, false);
 });
 
+test('transaction rollback mock discards every staged checkout mutation', async () => {
+  const committed = {
+    orders: [],
+    payments: [],
+    supplierOrders: [],
+    cartItemIds: ['cart-item-1'],
+    cartStatus: 'ACTIVE',
+    projectStatus: 'SELECTED',
+  };
+  const prisma = {
+    $transaction: async (callback) => {
+      const staged = {
+        orders: [...committed.orders],
+        payments: [...committed.payments],
+        supplierOrders: [...committed.supplierOrders],
+        cartItemIds: [...committed.cartItemIds],
+        cartStatus: committed.cartStatus,
+        projectStatus: committed.projectStatus,
+      };
+      const tx = {
+        cart: {
+          findFirst: async () => cart(),
+          update: async (args) => {
+            staged.cartStatus = args.data.status;
+            throw new Error('forced cart update failure');
+          },
+        },
+        cartItem: {
+          deleteMany: async (args) => {
+            const deletedIds = new Set(args.where.id.in);
+            staged.cartItemIds = staged.cartItemIds.filter(
+              (id) => !deletedIds.has(id),
+            );
+          },
+        },
+        order: {
+          create: async (args) => {
+            staged.orders.push(args.data);
+            staged.payments.push(args.data.payments.create);
+            staged.supplierOrders.push(...args.data.supplierOrders.create);
+            return orderRecord();
+          },
+        },
+        roomProject: {
+          updateMany: async (args) => {
+            staged.projectStatus = args.data.status;
+          },
+        },
+      };
+
+      const result = await callback(tx);
+      Object.assign(committed, staged);
+      return result;
+    },
+  };
+  const service = new OrdersService(prisma);
+
+  await assert.rejects(
+    service.createOrder(dto, context),
+    /forced cart update failure/,
+  );
+
+  assert.deepEqual(committed, {
+    orders: [],
+    payments: [],
+    supplierOrders: [],
+    cartItemIds: ['cart-item-1'],
+    cartStatus: 'ACTIVE',
+    projectStatus: 'SELECTED',
+  });
+});
+
 test('normalized idempotency key returns the original order without opening a transaction', async () => {
   let lookup;
   const prisma = {
