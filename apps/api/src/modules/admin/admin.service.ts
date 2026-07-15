@@ -36,7 +36,7 @@ export class AdminService {
       this.prisma.order.count(),
       this.prisma.order.count({
         where: {
-          status: OrderStatus.CREATED,
+          status: OrderStatus.PENDING_PAYMENT,
         },
       }),
       this.prisma.generationJob.count(),

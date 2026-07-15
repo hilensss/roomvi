@@ -135,9 +135,11 @@ export class OrdersService {
 
           cartId: refreshedCart.id,
 
-          status: OrderStatus.CREATED,
-          paymentStatus: PaymentStatus.NOT_REQUIRED,
+          status: OrderStatus.PENDING_PAYMENT,
+          paymentStatus: PaymentStatus.PENDING,
 
+          subtotalAmount: refreshedCart.totalAmount,
+          deliveryAmount: 0,
           totalAmount: refreshedCart.totalAmount,
           currency: refreshedCart.currency,
 
@@ -147,7 +149,7 @@ export class OrdersService {
 
           deliveryAddress: dto.deliveryAddress,
           deliveryDate: dto.deliveryDate ? new Date(dto.deliveryDate) : null,
-          comment: dto.comment,
+          customerComment: dto.comment,
 
           items: {
             create: refreshedCart.items.map((item) => ({
@@ -163,9 +165,12 @@ export class OrdersService {
               quantity: item.quantity,
 
               priceSnapshot: item.priceSnapshot,
+              totalPrice: item.priceSnapshot * item.quantity,
               titleSnapshot: item.titleSnapshot,
               imageSnapshot: item.imageSnapshot,
               availabilitySnapshot: item.availabilitySnapshot,
+              supplierNameSnapshot: null,
+              productUrlSnapshot: item.product.productUrl,
             })),
           },
 

@@ -458,10 +458,11 @@ model CartItem {
 }
 
 enum OrderStatus {
-  CREATED
+  PENDING_PAYMENT
+  CONFIRMED
   PROCESSING
   COMPLETED
-  CANCELED
+  CANCELLED
 }
 
 enum PaymentStatus {
@@ -469,7 +470,34 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+  CANCELLED
   REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentProvider {
+  MANUAL
+  ALFABANK
+}
+
+enum FulfillmentStatus {
+  NOT_STARTED
+  PROCUREMENT
+  PARTIALLY_PROCURED
+  PROCURED
+  SHIPPED
+  DELIVERED
+}
+
+enum OrderItemProcurementStatus {
+  NOT_STARTED
+  ORDERED
+  CONFIRMED_BY_SUPPLIER
+  UNAVAILABLE
+  REPLACEMENT_REQUIRED
+  SHIPPED
+  DELIVERED
+  CANCELLED
 }
 
 enum SupplierOrderStatus {
@@ -483,10 +511,13 @@ enum SupplierOrderStatus {
 }
 
 model Order {
-  id String @id @default(uuid())
+  id     String @id @default(uuid())
+  number Int    @unique @default(autoincrement())
 
   userId String?
-  user   User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  idempotencyKey String?
 
   guestSessionId String?
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
@@ -494,30 +525,46 @@ model Order {
   cartId String @unique
   cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Restrict)
 
-  status        OrderStatus   @default(CREATED)
-  paymentStatus PaymentStatus @default(NOT_REQUIRED)
+  status            OrderStatus       @default(PENDING_PAYMENT)
+  paymentStatus     PaymentStatus     @default(PENDING)
+  fulfillmentStatus FulfillmentStatus @default(NOT_STARTED)
 
-  totalAmount Int
-  currency    String @default("RUB")
+  subtotalAmount Int
+  deliveryAmount Int
+  totalAmount    Int
+  currency       String @default("RUB")
 
   customerName  String
   customerPhone String
   customerEmail String?
 
-  deliveryAddress String
-  deliveryDate    DateTime?
-  comment         String?
+  deliveryAddress    String
+  deliveryCity       String?
+  deliveryPostalCode String?
+  deliveryComment    String?
+  deliveryDate       DateTime?
+  customerComment    String?
+  managerComment     String?
+
+  paidAt      DateTime?
+  cancelledAt DateTime?
+  completedAt DateTime?
 
   items          OrderItem[]
+  payments       Payment[]
   supplierOrders SupplierOrder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([userId, idempotencyKey])
   @@index([userId])
   @@index([guestSessionId])
   @@index([cartId])
   @@index([status])
+  @@index([paymentStatus])
+  @@index([fulfillmentStatus])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -526,8 +573,8 @@ model OrderItem {
   orderId String
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   supplierId String
 
@@ -535,15 +582,21 @@ model OrderItem {
 
   source CartItemSource @default(CATALOG)
 
-  roomProjectId String?
+  roomProjectId   String?
   designVariantId String?
 
   quantity Int
 
-  priceSnapshot Int
-  titleSnapshot String
-  imageSnapshot String?
+  priceSnapshot        Int
+  totalPrice           Int
+  titleSnapshot        String
+  imageSnapshot        String?
   availabilitySnapshot String
+  supplierNameSnapshot String?
+  productUrlSnapshot   String?
+
+  procurementStatus OrderItemProcurementStatus @default(NOT_STARTED)
+  managerComment    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -554,6 +607,35 @@ model OrderItem {
   @@index([source])
   @@index([roomProjectId])
   @@index([designVariantId])
+  @@index([procurementStatus])
+}
+
+model Payment {
+  id String @id @default(uuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  provider PaymentProvider
+  status   PaymentStatus   @default(PENDING)
+
+  externalPaymentId String?
+  paymentUrl        String?
+
+  amount   Int
+  currency String @default("RUB")
+
+  failureCode    String?
+  failureMessage String?
+  metadata       Json?
+  paidAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([externalPaymentId])
+  @@index([status])
 }
 
 model SupplierOrder {
