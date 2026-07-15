@@ -21,10 +21,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { CreateOrderDto } from './dto/create-order.dto.js';
 import { OrderQueryDto } from './dto/order-query.dto.js';
 import { assertOrderCanBeCancelled } from './order-state.js';
+import { runSerializableTransaction } from './serializable-transaction.js';
 
 const POSTGRES_INT_MAX = 2_147_483_647;
 const ORDER_CURRENCY = 'RUB';
-const SERIALIZABLE_ATTEMPTS = 3;
 
 const paymentSummarySelect = {
   id: true,
@@ -313,7 +313,7 @@ export class OrdersService {
   }
 
   async cancelOrder(orderId: string, context: UserOrderContext) {
-    return this.runSerializableTransaction(async (tx) => {
+    return runSerializableTransaction(this.prisma, async (tx) => {
       const order = await tx.order.findFirst({
         where: { id: orderId, userId: context.user.userId },
         select: {
@@ -401,7 +401,7 @@ export class OrdersService {
     }
 
     try {
-      return await this.runSerializableTransaction(async (tx) => {
+      return await runSerializableTransaction(this.prisma, async (tx) => {
         if (normalizedKey) {
           const existingOrder = await tx.order.findFirst({
             where: { userId, idempotencyKey: normalizedKey },
@@ -662,27 +662,6 @@ export class OrdersService {
 
   private isUniqueConstraintError(error: unknown) {
     return this.hasPrismaErrorCode(error, 'P2002');
-  }
-
-  private async runSerializableTransaction<T>(
-    operation: (tx: Prisma.TransactionClient) => Promise<T>,
-  ): Promise<T> {
-    for (let attempt = 1; attempt <= SERIALIZABLE_ATTEMPTS; attempt += 1) {
-      try {
-        return await this.prisma.$transaction(operation, {
-          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-        });
-      } catch (error: unknown) {
-        if (
-          !this.hasPrismaErrorCode(error, 'P2034') ||
-          attempt === SERIALIZABLE_ATTEMPTS
-        ) {
-          throw error;
-        }
-      }
-    }
-
-    throw new Error('Serializable transaction retry limit exhausted');
   }
 
   private hasPrismaErrorCode(error: unknown, code: string) {

@@ -119,6 +119,9 @@ export function assertProcurementStatusTransition(
   assertTransition(current, next, procurementTransitions, 'procurement status');
 }
 
+export const assertOrderItemProcurementTransition =
+  assertProcurementStatusTransition;
+
 export function deriveFulfillmentStatus(
   statuses: readonly OrderItemProcurementStatus[],
 ): FulfillmentStatus {

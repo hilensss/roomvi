@@ -14,6 +14,8 @@ import { AdminOrdersQueryDto } from './dto/admin-orders-query.dto.js';
 import { AdminPaginationQueryDto } from './dto/admin-pagination-query.dto.js';
 import { AdminProductsQueryDto } from './dto/admin-products-query.dto.js';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto.js';
+import { UpdateManagerCommentDto } from './dto/update-manager-comment.dto.js';
+import { UpdateOrderItemProcurementStatusDto } from './dto/update-order-item-procurement-status.dto.js';
 import { UpdateProductAdminDto } from './dto/update-product-admin.dto.js';
 import { UpdateSupplierOrderStatusDto } from './dto/update-supplier-order-status.dto.js';
 import { AdminGuard } from './guards/admin.guard.js';
@@ -44,6 +46,32 @@ export class AdminController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.adminService.updateOrderStatus(id, dto);
+  }
+
+  @Patch('orders/:id/manager-comment')
+  async updateOrderManagerComment(
+    @Param('id') id: string,
+    @Body() dto: UpdateManagerCommentDto,
+  ) {
+    return this.adminService.updateOrderManagerComment(id, dto);
+  }
+
+  @Patch('orders/:id/items/:itemId/procurement-status')
+  async updateOrderItemProcurementStatus(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateOrderItemProcurementStatusDto,
+  ) {
+    return this.adminService.updateOrderItemProcurementStatus(id, itemId, dto);
+  }
+
+  @Patch('orders/:id/items/:itemId/manager-comment')
+  async updateOrderItemManagerComment(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: UpdateManagerCommentDto,
+  ) {
+    return this.adminService.updateOrderItemManagerComment(id, itemId, dto);
   }
 
   @Get('supplier-orders')
