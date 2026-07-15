@@ -5,6 +5,9 @@ import { BadRequestException, ValidationPipe } from '@nestjs/common';
 const { CreateOrderDto } = await import(
   '../dist/modules/orders/dto/create-order.dto.js'
 );
+const { OrderQueryDto } = await import(
+  '../dist/modules/orders/dto/order-query.dto.js'
+);
 
 const pipe = new ValidationPipe({
   whitelist: true,
@@ -25,6 +28,10 @@ const validBody = {
 
 function transformBody(body) {
   return pipe.transform(body, { type: 'body', metatype: CreateOrderDto });
+}
+
+function transformQuery(query) {
+  return pipe.transform(query, { type: 'query', metatype: OrderQueryDto });
 }
 
 test('CreateOrderDto accepts only the approved checkout fields', async () => {
@@ -80,6 +87,32 @@ test('CreateOrderDto validates required values and every documented bound', asyn
     delete body[field];
     await assert.rejects(
       transformBody(body),
+      (error) => error instanceof BadRequestException,
+    );
+  }
+});
+
+test('OrderQueryDto applies defaults and transforms integer query strings', async () => {
+  const defaults = await transformQuery({});
+  assert.equal(defaults.limit, 20);
+  assert.equal(defaults.offset, 0);
+
+  const transformed = await transformQuery({ limit: '100', offset: '4' });
+  assert.equal(transformed.limit, 100);
+  assert.equal(transformed.offset, 4);
+});
+
+test('OrderQueryDto rejects unknown values and values outside integer bounds', async () => {
+  for (const query of [
+    { limit: '0' },
+    { limit: '101' },
+    { limit: '1.5' },
+    { offset: '-1' },
+    { offset: '1.5' },
+    { unexpected: 'value' },
+  ]) {
+    await assert.rejects(
+      transformQuery(query),
       (error) => error instanceof BadRequestException,
     );
   }

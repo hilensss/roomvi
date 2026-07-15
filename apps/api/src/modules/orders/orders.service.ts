@@ -23,6 +23,8 @@ import { OrderQueryDto } from './dto/order-query.dto.js';
 import { assertOrderCanBeCancelled } from './order-state.js';
 
 const POSTGRES_INT_MAX = 2_147_483_647;
+const ORDER_CURRENCY = 'RUB';
+const SERIALIZABLE_ATTEMPTS = 3;
 
 const paymentSummarySelect = {
   id: true,
@@ -123,6 +125,7 @@ const checkoutCartSelect = {
   currency: true,
   items: {
     select: {
+      id: true,
       productId: true,
       source: true,
       roomProjectId: true,
@@ -310,7 +313,7 @@ export class OrdersService {
   }
 
   async cancelOrder(orderId: string, context: UserOrderContext) {
-    return this.prisma.$transaction(async (tx) => {
+    return this.runSerializableTransaction(async (tx) => {
       const order = await tx.order.findFirst({
         where: { id: orderId, userId: context.user.userId },
         select: {
@@ -337,14 +340,15 @@ export class OrdersService {
         order.fulfillmentStatus,
       );
 
-      await tx.payment.updateMany({
-        where: { orderId, status: PaymentStatus.PENDING },
-        data: { status: PaymentStatus.CANCELLED },
-      });
-
       const cancelledAt = new Date();
-      const updatedOrder = await tx.order.update({
-        where: { id: orderId },
+      const updated = await tx.order.updateMany({
+        where: {
+          id: orderId,
+          userId: context.user.userId,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          fulfillmentStatus: FulfillmentStatus.NOT_STARTED,
+        },
         data: {
           status: OrderStatus.CANCELLED,
           cancelledAt,
@@ -352,8 +356,25 @@ export class OrdersService {
             ? { paymentStatus: PaymentStatus.CANCELLED }
             : {}),
         },
+      });
+
+      if (updated.count !== 1) {
+        throw new ConflictException('Order changed during cancellation');
+      }
+
+      await tx.payment.updateMany({
+        where: { orderId, status: PaymentStatus.PENDING },
+        data: { status: PaymentStatus.CANCELLED },
+      });
+
+      const updatedOrder = await tx.order.findFirst({
+        where: { id: orderId, userId: context.user.userId },
         select: orderDetailSelect,
       });
+
+      if (!updatedOrder) {
+        throw new ConflictException('Cancelled order could not be reloaded');
+      }
 
       return mapOrderDetail(updatedOrder);
     });
@@ -380,7 +401,7 @@ export class OrdersService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      return await this.runSerializableTransaction(async (tx) => {
         if (normalizedKey) {
           const existingOrder = await tx.order.findFirst({
             where: { userId, idempotencyKey: normalizedKey },
@@ -392,18 +413,17 @@ export class OrdersService {
           }
         }
 
-        const selectedCart = cartId
-          ? await tx.cart.findUnique({
-              where: { id: cartId },
-              select: checkoutCartSelect,
-            })
-          : await tx.cart.findFirst({
-              where: { userId, status: CartStatus.ACTIVE },
-              orderBy: { updatedAt: 'desc' },
-              select: checkoutCartSelect,
-            });
+        const selectedCart = await tx.cart.findFirst({
+          where: { userId, status: CartStatus.ACTIVE },
+          orderBy: { createdAt: 'desc' },
+          select: checkoutCartSelect,
+        });
 
-        if (!selectedCart || selectedCart.userId !== userId) {
+        if (
+          !selectedCart ||
+          selectedCart.userId !== userId ||
+          (cartId !== undefined && selectedCart.id !== cartId)
+        ) {
           throw new NotFoundException('Active cart not found');
         }
 
@@ -426,7 +446,7 @@ export class OrdersService {
             subtotalAmount,
             deliveryAmount: 0,
             totalAmount: subtotalAmount,
-            currency: selectedCart.currency,
+            currency: ORDER_CURRENCY,
             customerName: dto.customerName,
             customerEmail: dto.customerEmail,
             customerPhone: dto.customerPhone,
@@ -463,7 +483,7 @@ export class OrdersService {
                 provider: PaymentProvider.MANUAL,
                 status: PaymentStatus.PENDING,
                 amount: subtotalAmount,
-                currency: 'RUB',
+                currency: ORDER_CURRENCY,
               },
             },
             supplierOrders: {
@@ -473,7 +493,7 @@ export class OrdersService {
                 payload: {
                   supplierId: group.supplierId,
                   supplierName: group.supplierName,
-                  currency: selectedCart.currency,
+                  currency: ORDER_CURRENCY,
                   items: group.items.map((item) => ({
                     productId: item.product.id,
                     externalProductId: item.product.externalId,
@@ -496,7 +516,7 @@ export class OrdersService {
         });
 
         await tx.cartItem.deleteMany({
-          where: { cartId: selectedCart.id },
+          where: { id: { in: selectedCart.items.map((item) => item.id) } },
         });
 
         await tx.cart.update({
@@ -504,7 +524,7 @@ export class OrdersService {
           data: {
             status: CartStatus.ORDER_CREATED,
             totalAmount: subtotalAmount,
-            currency: selectedCart.currency,
+            currency: ORDER_CURRENCY,
           },
         });
 
@@ -542,6 +562,10 @@ export class OrdersService {
       throw new BadRequestException('Cart is empty');
     }
 
+    if (cart.currency !== ORDER_CURRENCY) {
+      throw new BadRequestException('Cart currency must be RUB');
+    }
+
     let subtotalAmount = 0;
     const pricedItems = cart.items.map((item) => {
       if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
@@ -563,8 +587,8 @@ export class OrdersService {
         );
       }
 
-      if (item.product.currency !== cart.currency) {
-        throw new BadRequestException('Cart contains mixed currencies');
+      if (item.product.currency !== ORDER_CURRENCY) {
+        throw new BadRequestException('Product currency must be RUB');
       }
 
       const totalPrice = item.product.price * item.quantity;
@@ -637,11 +661,36 @@ export class OrdersService {
   }
 
   private isUniqueConstraintError(error: unknown) {
+    return this.hasPrismaErrorCode(error, 'P2002');
+  }
+
+  private async runSerializableTransaction<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 1; attempt <= SERIALIZABLE_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(operation, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error: unknown) {
+        if (
+          !this.hasPrismaErrorCode(error, 'P2034') ||
+          attempt === SERIALIZABLE_ATTEMPTS
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('Serializable transaction retry limit exhausted');
+  }
+
+  private hasPrismaErrorCode(error: unknown, code: string) {
     return (
       typeof error === 'object' &&
       error !== null &&
       'code' in error &&
-      error.code === 'P2002'
+      error.code === code
     );
   }
 }
