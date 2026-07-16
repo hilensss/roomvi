@@ -1,17 +1,16 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ArrowRight, ShoppingBag, Sparkles } from 'lucide-react';
+import { ShoppingBag, Sparkles } from 'lucide-react';
 import { AuthRequiredModal } from '@/features/auth/components/auth-required-modal';
 import { useCurrentUserQuery } from '@/features/auth/api/auth-queries';
 import { useCurrentCartQuery } from '../api/cart-queries';
 import {
-  formatMoney,
   getCartGroups,
   getCartItemsCount,
   getCartItemsTotal,
-  getDeliveryPrice,
   isRealCart,
 } from '../lib/cart.helpers';
 import { CartGroupCard } from './cart-group-card';
@@ -19,6 +18,7 @@ import { CartSummaryCard } from './cart-summary-card';
 import { CartBenefitsCard } from './cart-benefits-card';
 
 export function CartPage() {
+  const router = useRouter();
   const [authModalOpen, setAuthModalOpen] = useState(false);
 
   const currentUserQuery = useCurrentUserQuery();
@@ -51,7 +51,7 @@ export function CartPage() {
   const groups = getCartGroups(items);
   const itemsCount = getCartItemsCount(items);
   const totalAmount = getCartItemsTotal(items);
-  const deliveryPrice = getDeliveryPrice(totalAmount);
+  const deliveryPrice = 0;
   const finalAmount = totalAmount + deliveryPrice;
 
   const handleCheckout = () => {
@@ -60,9 +60,7 @@ export function CartPage() {
       return;
     }
 
-    // Следующим этапом сделаем /checkout или checkout modal/form.
-    // Пока просто оставляем точку входа.
-    console.log('go checkout');
+    router.push('/checkout');
   };
 
   return (
@@ -124,6 +122,7 @@ export function CartPage() {
         onClose={() => setAuthModalOpen(false)}
         onSuccess={() => {
           setAuthModalOpen(false);
+          router.push('/checkout');
         }}
       />
     </div>

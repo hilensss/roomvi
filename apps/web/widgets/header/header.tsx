@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShoppingCart, User } from 'lucide-react';
+import { ShieldCheck, ShoppingCart, User } from 'lucide-react';
 import { useState } from 'react';
 import { useCurrentUserQuery } from '@/features/auth/api/auth-queries';
 import { AuthModal } from '@/features/auth/components/auth-modal';
@@ -49,6 +49,17 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          {user?.role === 'ADMIN' ? (
+            <Link
+              href="/admin/orders"
+              aria-label="Админка"
+              className="flex h-11 items-center gap-2 rounded-2xl border border-brand/40 px-3 text-sm font-medium text-brand transition hover:bg-brand hover:text-white"
+            >
+              <ShieldCheck size={18} />
+              <span className="hidden lg:inline">Админка</span>
+            </Link>
+          ) : null}
+
           <Link
             href="/cart"
             className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#bfc0c0]/70 text-[#2d3142] transition hover:border-[#ef8354] hover:text-[#ef8354]"

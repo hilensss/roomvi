@@ -47,8 +47,16 @@ export class ProfileService {
       this.prisma.order.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
-        include: {
-          items: true,
+        select: {
+          id: true,
+          number: true,
+          status: true,
+          paymentStatus: true,
+          fulfillmentStatus: true,
+          totalAmount: true,
+          currency: true,
+          createdAt: true,
+          updatedAt: true,
         },
       }),
     ]);

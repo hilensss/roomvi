@@ -1,17 +1,25 @@
 'use client';
 
 import Link from 'next/link';
-import { LogOut, Plus, Settings, Sparkles } from 'lucide-react';
+import { CheckCircle2, LogOut, Plus, Sparkles, X } from 'lucide-react';
+import { useState } from 'react';
 import { useProfileSummaryQuery } from '../api/profile-queries';
 import { ProfileUserCard } from './profile-user-card';
 import { ProfileProjectCard } from './profile-project-card';
-import { ProfileOrdersTable } from './profile-orders-table';
+import { ProfileOrders } from '@/features/orders/components/profile-orders';
 import { formatMoney } from '@/features/catalog/lib/catalog.helpers';
 import { useLogoutMutation } from '@/features/auth/api/auth-queries';
 import { useRouter } from 'next/navigation';
 
-export function ProfilePage() {
+export function ProfilePage({
+  initialOrderId,
+  orderCreated = false,
+}: {
+  initialOrderId?: string;
+  orderCreated?: boolean;
+}) {
   const profileQuery = useProfileSummaryQuery();
+  const [showCreatedBanner, setShowCreatedBanner] = useState(orderCreated);
 
   if (profileQuery.isLoading) {
     return (
@@ -38,15 +46,35 @@ export function ProfilePage() {
 
   const { user, projects, orders } = profileQuery.data;
 
-  const userName = user.name || user.email;
   const firstName = user.name?.split(' ')[0] || 'друг';
-  const totalSpent = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalSpent = orders
+    .filter((order) => order.status !== 'CANCELLED')
+    .reduce((sum, order) => sum + order.totalAmount, 0);
 
   return (
     <div className="min-h-full bg-white">
       <ProfileTopbar />
 
       <div className="rv-container-wide py-12">
+        {showCreatedBanner ? (
+          <div className="mb-8 flex items-start gap-4 rounded-card border border-emerald-200 bg-emerald-50 p-5 text-emerald-900">
+            <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold">Заказ успешно оформлен</div>
+              <p className="mt-1 text-sm text-emerald-800">
+                Менеджер свяжется с вами для подтверждения деталей.
+              </p>
+            </div>
+            <button
+              type="button"
+              aria-label="Закрыть уведомление"
+              onClick={() => setShowCreatedBanner(false)}
+              className="rounded-pill p-1 transition hover:bg-emerald-100"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        ) : null}
         <section className="mb-16 grid gap-8 lg:grid-cols-12">
           <div className="lg:col-span-7">
             <p className="rv-eyebrow mb-3">Аккаунт</p>
@@ -139,7 +167,7 @@ export function ProfilePage() {
             </span>
           </div>
 
-          <ProfileOrdersTable orders={orders} />
+          <ProfileOrders initialOrderId={initialOrderId} />
         </section>
       </div>
     </div>
