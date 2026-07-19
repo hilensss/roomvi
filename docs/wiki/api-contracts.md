@@ -23,3 +23,18 @@ Public item не содержит `externalProductId`, `supplierNameSnapshot`, `
 - `PATCH /admin/orders/:id/items/:itemId/manager-comment` — `{ managerComment: string | null }`.
 
 Все admin endpoints защищены `JwtAuthGuard + AdminGuard`. Mutation возвращает обновлённый admin order detail.
+
+## B2B furniture projects
+
+Все endpoints ниже защищены `JwtAuthGuard + ManagerGuard`. Доступ имеют роли `MANAGER` и `ADMIN`.
+
+- `GET /manager/b2b-projects?limit=20&offset=0&search=&status=` — список проектов.
+- `GET /manager/b2b-projects/suppliers` — активные поставщики для формы проекта.
+- `POST /manager/b2b-projects` — создать мебельный проект. Body: `name`, `partnerName`, `supplierId`, `roomType`, `style`, optional `managerComment`.
+- `GET /manager/b2b-projects/:id` — проект, сохранённая подборка и последний generation job с вариантами.
+- `PATCH /manager/b2b-projects/:id` — изменить поля проекта до начала/завершения генерации. При смене поставщика подборка очищается.
+- `GET /manager/b2b-projects/:id/catalog?limit=40&offset=0&search=` — только активные, AI-eligible товары в наличии, с изображениями, принадлежащие поставщику проекта.
+- `PUT /manager/b2b-projects/:id/products` — заменить ручную подборку. Body: `{ productIds: string[] }`, от 1 до 6 уникальных UUID.
+- `POST /manager/b2b-projects/:id/generate` — повторно проверить подборку и создать `B2B_FURNITURE_LINE` job с `requestedVariants = 2`.
+
+Для обеих визуализаций worker использует одну и ту же сохранённую подборку и не вызывает автоматический product matching. В `DesignVariantProduct` сохраняются товарные snapshots.

@@ -90,6 +90,12 @@ export type Product = {
   color: string | null;
   isActive: boolean;
   isAiEligible: boolean;
+  supplier?: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+  };
 };
 
 export type RoomProject = {
@@ -198,7 +204,7 @@ export type CurrentCartResponse =
       currency: 'RUB';
     };
 
-export type UserRole = 'USER' | 'ADMIN';
+export type UserRole = 'USER' | 'MANAGER' | 'ADMIN';
 
 export type AuthUser = {
   id: string;

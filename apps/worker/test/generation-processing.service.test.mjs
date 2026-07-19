@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  B2BProjectStatus,
   GenerationJobStatus,
   GenerationOwnerType,
   GenerationProvider,
+  GenerationScenario,
   InteriorStyle,
   ProductCategory,
   RoomProjectStatus,
@@ -66,6 +68,7 @@ function createHarness(generateDesigns, options = {}) {
     status: RoomProjectStatus.READY_TO_GENERATE,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    b2bProject: options.b2bProject ?? null,
   };
   const generationJob = {
     id: 'job-1',
@@ -75,10 +78,14 @@ function createHarness(generateDesigns, options = {}) {
     guestSessionId: null,
     provider: GenerationProvider.MOCK,
     status: GenerationJobStatus.PENDING,
+    scenario: options.scenario ?? GenerationScenario.MARKETPLACE,
+    requestedVariants: options.requestedVariants ?? null,
     roomProject: project,
   };
   const jobUpdates = [];
   const createdVariants = [];
+  const matchingCalls = [];
+  const b2bProjectUpdates = [];
   const prisma = {
     generationJob: {
       findUnique: async () => generationJob,
@@ -90,6 +97,12 @@ function createHarness(generateDesigns, options = {}) {
     },
     roomProject: {
       update: async ({ data }) => ({ ...project, ...data }),
+    },
+    b2BProject: {
+      update: async ({ data }) => {
+        b2bProjectUpdates.push(data);
+        return { ...options.b2bProject, ...data };
+      },
     },
     designVariant: {
       create: async ({ data }) => {
@@ -116,7 +129,9 @@ function createHarness(generateDesigns, options = {}) {
     getProvider: () => ({ providerName: 'MOCK', generateDesigns }),
   };
   const productMatchingService = {
-    buildProductSetForVariant: async ({ variantNumber }) => {
+    buildProductSetForVariant: async (input) => {
+      matchingCalls.push(input);
+      const { variantNumber } = input;
       const product = createProduct(variantNumber);
       return {
         products: [product],
@@ -132,7 +147,13 @@ function createHarness(generateDesigns, options = {}) {
     productMatchingService,
   );
 
-  return { service, jobUpdates, createdVariants };
+  return {
+    service,
+    jobUpdates,
+    createdVariants,
+    matchingCalls,
+    b2bProjectUpdates,
+  };
 }
 
 function getVariantNumber(input) {
@@ -146,6 +167,62 @@ function createGeneratedVariant(input, variantNumber) {
     productIds: input.products.map((product) => product.id),
   };
 }
+
+test('furniture jobs generate exactly two variants from the unchanged manual product set', async () => {
+  const fixedProducts = [createProduct(11), createProduct(12)];
+  const providerInputs = [];
+  const b2bProject = {
+    id: 'b2b-project-1',
+    status: B2BProjectStatus.GENERATING,
+    products: fixedProducts.map((product, sortOrder) => ({
+      productId: product.id,
+      sortOrder,
+      product,
+    })),
+  };
+  const {
+    service,
+    createdVariants,
+    matchingCalls,
+    b2bProjectUpdates,
+  } = createHarness(
+    async (input) => {
+      providerInputs.push(input);
+      return [createGeneratedVariant(input, getVariantNumber(input))];
+    },
+    {
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedVariants: 2,
+      b2bProject,
+    },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  assert.equal(matchingCalls.length, 0);
+  assert.equal(providerInputs.length, 2);
+  assert.deepEqual(
+    providerInputs.map((input) => input.products.map(({ id }) => id)),
+    [
+      ['product-11', 'product-12'],
+      ['product-11', 'product-12'],
+    ],
+  );
+  assert.equal(createdVariants.length, 2);
+  assert.deepEqual(
+    createdVariants.map((variant) =>
+      variant.products.create.map(({ productId }) => productId),
+    ),
+    [
+      ['product-11', 'product-12'],
+      ['product-11', 'product-12'],
+    ],
+  );
+  assert.equal(
+    b2bProjectUpdates.at(-1).status,
+    B2BProjectStatus.COMPLETED,
+  );
+});
 
 test('runs two variants concurrently and preserves variant order', async () => {
   let activeCalls = 0;
