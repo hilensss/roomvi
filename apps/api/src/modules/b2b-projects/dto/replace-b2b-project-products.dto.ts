@@ -9,7 +9,7 @@ import {
 export class ReplaceB2BProjectProductsDto {
   @IsArray()
   @ArrayMinSize(1)
-  @ArrayMaxSize(6)
+  @ArrayMaxSize(10)
   @ArrayUnique()
   @IsUUID('4', { each: true })
   productIds!: string[];

@@ -387,6 +387,7 @@ model B2BProject {
   roomType       RoomType
   style          InteriorStyle
   managerComment String?
+  sourceImageUrl String?
   createdById    String
   createdBy      User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
   roomProjectId  String?             @unique

@@ -47,6 +47,7 @@ export type B2BProject = {
   roomType: RoomType;
   style: InteriorStyle;
   managerComment: string | null;
+  sourceImageUrl: string | null;
   roomProjectId: string | null;
   products: B2BProjectProduct[];
   roomProject: {
@@ -91,6 +92,7 @@ export type CreateB2BProjectInput = {
   roomType: RoomType;
   style: InteriorStyle;
   managerComment?: string;
+  sourceImageUrl?: string;
 };
 
 export type StartB2BGenerationResponse = {

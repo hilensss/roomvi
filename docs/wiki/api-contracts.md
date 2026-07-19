@@ -30,14 +30,14 @@ Public item не содержит `externalProductId`, `supplierNameSnapshot`, `
 
 - `GET /manager/b2b-projects?limit=20&offset=0&search=&status=` — список проектов.
 - `GET /manager/b2b-projects/suppliers` — активные поставщики для формы проекта.
-- `POST /manager/b2b-projects` — создать мебельный проект. Body: `name`, `partnerName`, `supplierId`, `roomType`, `style`, optional `managerComment`.
+- `POST /manager/b2b-projects` — создать мебельный проект. Body: `name`, `partnerName`, `supplierId`, `roomType`, `style`, optional `managerComment`, optional HTTP/HTTPS `sourceImageUrl` ранее загруженного фото пустой комнаты.
 - `GET /manager/b2b-projects/:id` — проект, сохранённая подборка и последний generation job с вариантами.
 - `PATCH /manager/b2b-projects/:id` — изменить поля проекта до начала/завершения генерации. При смене поставщика подборка очищается.
 - `GET /manager/b2b-projects/:id/catalog?limit=40&offset=0&search=` — только активные, AI-eligible товары в наличии, с изображениями, принадлежащие поставщику проекта.
-- `PUT /manager/b2b-projects/:id/products` — заменить ручную подборку. Body: `{ productIds: string[] }`, от 1 до 6 уникальных UUID.
+- `PUT /manager/b2b-projects/:id/products` — заменить ручную подборку. Body: `{ productIds: string[] }`, от 1 до 10 уникальных UUID без `sourceImageUrl` или от 1 до 9 при заданном фото. DTO ограничивает абсолютный максимум десятью, а сервис применяет лимит конкретного проекта.
 - `POST /manager/b2b-projects/:id/generate` — атомарно захватить проект, повторно проверить подборку и создать `B2B_FURNITURE_LINE` job с `requestedVariants = 2`. Допустим для `READY_TO_GENERATE` и повторно для `FAILED`.
 - `GET /manager/b2b-projects/:id/variants/:variantId/download` — проверить принадлежность варианта проекту и вернуть изображение с `Content-Disposition: attachment`. Proxy принимает только image-ответы с origin из `S3_PUBLIC_BASE_URL` или `B2B_DOWNLOAD_ALLOWED_ORIGINS`, запрещает redirects, ограничивает запрос десятью секундами, поток — 20 MiB.
 
-Для обеих визуализаций worker использует одну и ту же сохранённую подборку и не вызывает автоматический product matching. Каждый подготовленный запрос должен вернуть ровно одну визуализацию. В `DesignVariantProduct` сохраняются товарные snapshots, которые используются в B2B-результате вместо изменяемых live-данных каталога.
+Для обеих визуализаций worker использует одну и ту же сохранённую подборку и не вызывает автоматический product matching. Worker повторно применяет лимит 10/9 по `RoomProject.sourceImageUrl`. Каждый подготовленный запрос должен вернуть ровно одну визуализацию. В `DesignVariantProduct` сохраняются товарные snapshots, которые используются в B2B-результате вместо изменяемых live-данных каталога.
 
 Обычные Marketplace endpoints загружают только `GenerationScenario.MARKETPLACE` и `RoomProject` без связи с `B2BProject`. B2B-варианты нельзя выбрать или добавить в пользовательскую корзину.

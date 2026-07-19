@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     roomType: 'LIVING_ROOM',
     style: 'SCANDI',
     managerComment: null,
+    sourceImageUrl: null,
     roomProjectId: null,
     products: [],
     roomProject: null,
@@ -60,8 +61,8 @@ vi.mock('../api/b2b-queries', () => ({
   }),
   useB2BProjectCatalogQuery: () => ({
     data: {
-      items: Array.from({ length: 7 }, (_, index) => product(index + 1)),
-      total: 7,
+      items: Array.from({ length: 11 }, (_, index) => product(index + 1)),
+      total: 11,
       limit: 40,
       offset: 0,
     },
@@ -85,25 +86,25 @@ beforeEach(() => {
   mocks.project.status = 'DRAFT';
   mocks.project.products = [];
   mocks.project.roomProject = null;
-  mocks.project.products = [];
+  mocks.project.sourceImageUrl = null;
 });
 
-it('limits manual selection to six products and saves their exact ids', async () => {
+it('limits manual selection to ten products without a room photo and saves their exact ids', async () => {
   mocks.replace.mockResolvedValue({});
   const user = userEvent.setup();
   renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
 
-  for (let index = 1; index <= 6; index += 1) {
+  for (let index = 1; index <= 10; index += 1) {
     await user.click(
       screen.getByRole('button', { name: `Выбрать Товар ${index}` }),
     );
   }
 
   expect(
-    screen.getByRole('button', { name: 'Выбрать Товар 7' }),
+    screen.getByRole('button', { name: 'Выбрать Товар 11' }),
   ).toBeDisabled();
   await user.click(
-    screen.getByRole('button', { name: 'Сохранить подборку (6)' }),
+    screen.getByRole('button', { name: 'Сохранить подборку (10)' }),
   );
 
   expect(mocks.replace).toHaveBeenCalledWith({
@@ -115,8 +116,33 @@ it('limits manual selection to six products and saves their exact ids', async ()
       'product-4',
       'product-5',
       'product-6',
+      'product-7',
+      'product-8',
+      'product-9',
+      'product-10',
     ],
   });
+});
+
+it('limits manual selection to nine products with a room photo', async () => {
+  mocks.project.sourceImageUrl =
+    'https://cdn.example.com/empty-room.jpg';
+  const user = userEvent.setup();
+  renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
+
+  expect(
+    screen.getByRole('heading', { name: 'Выберите от 1 до 9 товаров' }),
+  ).toBeInTheDocument();
+
+  for (let index = 1; index <= 9; index += 1) {
+    await user.click(
+      screen.getByRole('button', { name: `Выбрать Товар ${index}` }),
+    );
+  }
+
+  expect(
+    screen.getByRole('button', { name: 'Выбрать Товар 10' }),
+  ).toBeDisabled();
 });
 
 it('renders generated designs with their product selection and download links', () => {

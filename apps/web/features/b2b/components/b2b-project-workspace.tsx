@@ -50,6 +50,7 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
 
   const savedIds = project.products.map(({ productId }) => productId);
   const selectedIds = selectionOverride ?? savedIds;
+  const selectionLimit = project.sourceImageUrl ? 9 : 10;
   const selectionChanged =
     selectedIds.length !== savedIds.length ||
     selectedIds.some((id, index) => id !== savedIds[index]);
@@ -63,7 +64,7 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
       setSelectionOverride(selectedIds.filter((id) => id !== productId));
       return;
     }
-    if (selectedIds.length < 6) {
+    if (selectedIds.length < selectionLimit) {
       setSelectionOverride([...selectedIds, productId]);
     }
   }
@@ -120,7 +121,7 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
         <Meta label="Стиль" value={project.style} />
         <Meta
           label="Выбрано"
-          value={`${selectedIds.length} из 6 товаров`}
+          value={`${selectedIds.length} из ${selectionLimit} товаров`}
         />
         {project.managerComment ? (
           <Meta
@@ -155,7 +156,7 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
             <div>
               <p className="rv-eyebrow mb-2">Ручная подборка</p>
               <h2 className="text-3xl font-semibold text-ink">
-                Выберите от 1 до 6 товаров
+                Выберите от 1 до {selectionLimit} товаров
               </h2>
               <p className="mt-2 text-ink-soft">
                 Оба варианта будут созданы строго с этой подборкой.
@@ -187,7 +188,8 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
                   product={product}
                   selected={selectedIds.includes(product.id)}
                   disabled={
-                    selectedIds.length >= 6 && !selectedIds.includes(product.id)
+                    selectedIds.length >= selectionLimit &&
+                    !selectedIds.includes(product.id)
                   }
                   onToggle={() => toggleProduct(product.id)}
                 />

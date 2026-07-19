@@ -7,6 +7,7 @@ import type {
   CreateB2BProjectInput,
   StartB2BGenerationResponse,
 } from '../model/b2b.types';
+import type { UploadedFile } from '@/shared/api/types';
 
 function withQuery(path: string, params: URLSearchParams) {
   const query = params.toString();
@@ -27,6 +28,16 @@ export function createB2BProject(input: CreateB2BProjectInput) {
   return apiFetch<B2BProject>('/manager/b2b-projects', {
     method: 'POST',
     body: JSON.stringify(input),
+  });
+}
+
+export function uploadB2BRoomImage(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return apiFetch<{ file: UploadedFile }>('/files/upload', {
+    method: 'POST',
+    body: formData,
   });
 }
 

@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import type { InteriorStyle, RoomType } from '@/shared/api/types';
+import { uploadB2BRoomImage } from '../api/b2b-api';
 import { useCreateB2BProjectMutation, useB2BSuppliersQuery } from '../api/b2b-queries';
 
 const roomTypes: Array<{ value: RoomType; label: string }> = [
@@ -37,6 +38,7 @@ export function CreateB2BProjectForm() {
   const suppliersQuery = useB2BSuppliersQuery();
   const createMutation = useCreateB2BProjectMutation();
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
     partnerName: '',
@@ -44,13 +46,18 @@ export function CreateB2BProjectForm() {
     roomType: 'LIVING_ROOM' as RoomType,
     style: 'SCANDI' as InteriorStyle,
     managerComment: '',
+    sourceImageFile: null as File | null,
   });
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setIsSubmitting(true);
 
     try {
+      const sourceImageUrl = form.sourceImageFile
+        ? (await uploadB2BRoomImage(form.sourceImageFile)).file.url
+        : undefined;
       const project = await createMutation.mutateAsync({
         name: form.name.trim(),
         partnerName: form.partnerName.trim(),
@@ -58,12 +65,15 @@ export function CreateB2BProjectForm() {
         roomType: form.roomType,
         style: form.style,
         managerComment: form.managerComment.trim(),
+        ...(sourceImageUrl ? { sourceImageUrl } : {}),
       });
       router.push(`/manager/projects/${project.id}`);
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Не удалось создать проект',
       );
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -160,6 +170,26 @@ export function CreateB2BProjectForm() {
             ))}
           </select>
         </Field>
+        <Field
+          label="Фото пустой комнаты (необязательно)"
+          className="md:col-span-2"
+        >
+          <input
+            type="file"
+            accept="image/*"
+            aria-label="Фото пустой комнаты (необязательно)"
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                sourceImageFile: event.target.files?.[0] ?? null,
+              }))
+            }
+            className="block w-full rounded-xl border border-line/60 bg-white px-4 py-3 text-sm text-ink file:mr-4 file:rounded-pill file:border-0 file:bg-brand-soft file:px-4 file:py-2 file:font-medium file:text-brand"
+          />
+          <span className="mt-2 block text-xs text-ink-soft">
+            С фото можно выбрать до 9 товаров, без фото — до 10.
+          </span>
+        </Field>
         <Field label="Комментарий" className="md:col-span-2">
           <textarea
             maxLength={2000}
@@ -191,14 +221,14 @@ export function CreateB2BProjectForm() {
         <button
           type="submit"
           disabled={
-            createMutation.isPending ||
+            isSubmitting ||
             !form.name.trim() ||
             !form.partnerName.trim() ||
             !form.supplierId
           }
           className="rounded-pill bg-dark px-7 py-3.5 text-sm font-semibold text-white transition hover:bg-brand disabled:pointer-events-none disabled:opacity-50"
         >
-          {createMutation.isPending ? 'Создаём...' : 'Создать проект'}
+          {isSubmitting ? 'Создаём...' : 'Создать проект'}
         </button>
       </div>
     </form>

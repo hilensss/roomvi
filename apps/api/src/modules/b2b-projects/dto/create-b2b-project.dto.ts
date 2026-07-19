@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUrl,
   IsUUID,
   Matches,
   MaxLength,
@@ -32,4 +33,11 @@ export class CreateB2BProjectDto {
   @IsString()
   @MaxLength(2000)
   managerComment?: string;
+
+  @IsOptional()
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_protocol: true,
+  })
+  sourceImageUrl?: string;
 }

@@ -15,6 +15,7 @@ import {
   listB2BSuppliers,
   replaceB2BProjectProducts,
   startB2BProjectGeneration,
+  uploadB2BRoomImage,
 } from './b2b-api';
 
 describe('b2b api', () => {
@@ -82,6 +83,21 @@ describe('b2b api', () => {
       '/manager/b2b-projects/project-1/generate',
       { method: 'POST' },
     );
+  });
+
+  it('uploads an optional empty-room photo through the existing file endpoint', async () => {
+    const file = new File(['room'], 'empty-room.jpg', {
+      type: 'image/jpeg',
+    });
+
+    await uploadB2BRoomImage(file);
+
+    expect(apiFetch).toHaveBeenCalledWith('/files/upload', {
+      method: 'POST',
+      body: expect.any(FormData),
+    });
+    const request = apiFetch.mock.calls[0][1];
+    expect(request.body.get('file')).toBe(file);
   });
 
   it('builds a protected attachment endpoint for generated images', () => {

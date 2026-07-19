@@ -141,7 +141,10 @@ export class GenerationProcessingService {
         );
       }
       const fixedProducts = isFurnitureProject
-        ? this.getFurnitureProducts(project.b2bProject)
+        ? this.getFurnitureProducts(
+            project.b2bProject,
+            project.sourceImageUrl,
+          )
         : null;
       const variantProgress = new Map<number, VariantProgressState>();
 
@@ -461,12 +464,14 @@ export class GenerationProcessingService {
           products: Array<{ product: Product }>;
         }
       | null,
+    sourceImageUrl: string | null,
   ): Product[] {
     const products = b2bProject?.products.map(({ product }) => product) ?? [];
+    const maximumProducts = sourceImageUrl ? 9 : 10;
 
     if (
       products.length < 1 ||
-      products.length > 6 ||
+      products.length > maximumProducts ||
       products.some(
         (product) =>
           !product.isActive ||
@@ -476,7 +481,7 @@ export class GenerationProcessingService {
       )
     ) {
       throw new BadRequestException(
-        'Furniture generation requires 1–6 active, AI-eligible, in-stock products with images',
+        `Furniture generation requires 1–${maximumProducts} active, AI-eligible, in-stock products with images`,
       );
     }
 

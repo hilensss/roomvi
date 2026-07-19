@@ -2,7 +2,7 @@
 
 > **For Codex:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Deliver the first manager-facing B2B flow: create a furniture visualization project, manually select 1–6 eligible products from one supplier, generate exactly two designs with that unchanged product set, and review/download the results.
+**Goal:** Deliver the first manager-facing B2B flow: create a furniture visualization project, manually select 1–10 eligible products from one supplier without an empty-room photo or 1–9 with one, generate exactly two designs with that unchanged product set, and review/download the results.
 
 **Architecture:** Add an isolated B2B project domain linked to the existing room project and generation pipeline. A generation scenario on each job preserves Marketplace behavior while letting the worker bypass automatic product matching for furniture projects. NestJS owns authorization and business validation; Next.js provides the manager workspace and polls the existing async pipeline.
 
@@ -41,7 +41,7 @@
 2. Add failing service tests for listing/creating projects, replacing the manual product set, catalog eligibility, and starting a two-variant job.
 3. Implement manager authorization and validated DTOs.
 4. Implement project CRUD, supplier options, eligible-project catalog, and product-set replacement.
-5. Revalidate 1–6 same-supplier, active, AI-eligible, in-stock products with images immediately before generation.
+5. Revalidate 1–10 same-supplier, active, AI-eligible, in-stock products with images immediately before generation, reduced to 1–9 when an empty-room photo is present.
 6. Create the linked room project/job transactionally, set `B2B_FURNITURE_LINE` with `requestedVariants: 2`, and enqueue it.
 7. Run the focused API suite until green.
 
@@ -90,7 +90,7 @@
 - Test: `apps/web/features/b2b/components/b2b-project-workspace.test.tsx`
 
 **Steps:**
-1. Add failing component tests for project creation and the 1–6 product selection/generation rules.
+1. Add failing component tests for project creation and the dynamic 1–10 / 1–9 product selection and generation rules.
 2. Build the project list and new-project form.
 3. Build the project workspace with manual selection, save/generate actions, progress polling, result cards, product lists, and individual image downloads.
 4. Run focused web tests until green.

@@ -125,6 +125,7 @@ export class B2BProjectsService {
         roomType: dto.roomType,
         style: dto.style,
         managerComment: dto.managerComment?.trim() || null,
+        sourceImageUrl: dto.sourceImageUrl ?? null,
         createdById,
       },
       include: projectDetailInclude,
@@ -227,12 +228,13 @@ export class B2BProjectsService {
 
       const project = await tx.b2BProject.findUnique({
         where: { id },
-        select: { supplierId: true },
+        select: { supplierId: true, sourceImageUrl: true },
       });
       if (!project) throw new NotFoundException('B2B project not found');
       const products = await this.loadValidProducts(
         project.supplierId,
         productIds,
+        this.getProductSelectionLimit(project.sourceImageUrl),
         tx,
       );
       const byId = new Map(products.map((product) => [product.id, product]));
@@ -286,12 +288,23 @@ export class B2BProjectsService {
       });
       if (!project) throw new NotFoundException('B2B project not found');
       const productIds = project.products.map(({ productId }) => productId);
-      await this.loadValidProducts(project.supplierId, productIds, tx);
+      await this.loadValidProducts(
+        project.supplierId,
+        productIds,
+        this.getProductSelectionLimit(project.sourceImageUrl),
+        tx,
+      );
 
       const roomProject = project.roomProjectId
         ? await tx.roomProject.update({
             where: { id: project.roomProjectId },
-            data: { status: RoomProjectStatus.READY_TO_GENERATE },
+            data: {
+              title: `${project.partnerName} · ${project.name}`,
+              roomType: project.roomType,
+              style: project.style,
+              sourceImageUrl: project.sourceImageUrl,
+              status: RoomProjectStatus.READY_TO_GENERATE,
+            },
           })
         : await tx.roomProject.create({
             data: {
@@ -300,6 +313,7 @@ export class B2BProjectsService {
               title: `${project.partnerName} · ${project.name}`,
               roomType: project.roomType,
               style: project.style,
+              sourceImageUrl: project.sourceImageUrl,
               status: RoomProjectStatus.READY_TO_GENERATE,
             },
           });
@@ -435,11 +449,14 @@ export class B2BProjectsService {
   private async loadValidProducts(
     supplierId: string,
     productIds: string[],
+    maximumProducts: number,
     client: Pick<Prisma.TransactionClient, 'product'> = this.prisma,
   ) {
     const uniqueIds = [...new Set(productIds)];
-    if (uniqueIds.length < 1 || uniqueIds.length > 6) {
-      throw new BadRequestException('Choose between 1 and 6 products');
+    if (uniqueIds.length < 1 || uniqueIds.length > maximumProducts) {
+      throw new BadRequestException(
+        `Choose between 1 and ${maximumProducts} products`,
+      );
     }
     if (uniqueIds.length !== productIds.length) {
       throw new BadRequestException('Product selection must be unique');
@@ -471,6 +488,10 @@ export class B2BProjectsService {
       );
     }
     return products;
+  }
+
+  private getProductSelectionLimit(sourceImageUrl?: string | null) {
+    return sourceImageUrl ? 9 : 10;
   }
 
   private getImageExtension(contentType: string) {

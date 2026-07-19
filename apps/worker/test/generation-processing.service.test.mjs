@@ -64,7 +64,7 @@ function createHarness(generateDesigns, options = {}) {
     widthCm: 400,
     heightCm: 270,
     depthCm: 350,
-    sourceImageUrl: null,
+    sourceImageUrl: options.sourceImageUrl ?? null,
     status: RoomProjectStatus.READY_TO_GENERATE,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
@@ -168,8 +168,8 @@ function createGeneratedVariant(input, variantNumber) {
   };
 }
 
-test('furniture jobs generate exactly two variants from the unchanged manual product set', async () => {
-  const fixedProducts = Array.from({ length: 6 }, (_, index) =>
+test('furniture jobs generate exactly two variants from up to ten unchanged manual products without a room photo', async () => {
+  const fixedProducts = Array.from({ length: 10 }, (_, index) =>
     createProduct(index + 11),
   );
   const providerInputs = [];
@@ -210,52 +210,51 @@ test('furniture jobs generate exactly two variants from the unchanged manual pro
   assert.equal(providerInputs.length, 2);
   assert.deepEqual(
     providerInputs.map((input) => input.products.map(({ id }) => id)),
-    [
-      [
-        'product-11',
-        'product-12',
-        'product-13',
-        'product-14',
-        'product-15',
-        'product-16',
-      ],
-      [
-        'product-11',
-        'product-12',
-        'product-13',
-        'product-14',
-        'product-15',
-        'product-16',
-      ],
-    ],
+    [fixedProducts.map(({ id }) => id), fixedProducts.map(({ id }) => id)],
   );
   assert.equal(createdVariants.length, 2);
   assert.deepEqual(
     createdVariants.map((variant) =>
       variant.products.create.map(({ productId }) => productId),
     ),
-    [
-      [
-        'product-11',
-        'product-12',
-        'product-13',
-        'product-14',
-        'product-15',
-        'product-16',
-      ],
-      [
-        'product-11',
-        'product-12',
-        'product-13',
-        'product-14',
-        'product-15',
-        'product-16',
-      ],
-    ],
+    [fixedProducts.map(({ id }) => id), fixedProducts.map(({ id }) => id)],
   );
   assert.equal(
     b2bProjectUpdates.at(-1).status,
     B2BProjectStatus.COMPLETED,
+  );
+});
+
+test('furniture jobs reject ten products when an empty-room photo is supplied', async () => {
+  const fixedProducts = Array.from({ length: 10 }, (_, index) =>
+    createProduct(index + 1),
+  );
+  const b2bProject = {
+    id: 'b2b-project-1',
+    status: B2BProjectStatus.GENERATING,
+    products: fixedProducts.map((product, sortOrder) => ({
+      productId: product.id,
+      sortOrder,
+      product,
+    })),
+  };
+  const { service, b2bProjectUpdates } = createHarness(
+    async () => assert.fail('provider must not receive an oversized set'),
+    {
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedVariants: 2,
+      sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
+      b2bProject,
+    },
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /1–9 active, AI-eligible/,
+  );
+  assert.equal(
+    b2bProjectUpdates.at(-1).status,
+    B2BProjectStatus.FAILED,
   );
 });
 

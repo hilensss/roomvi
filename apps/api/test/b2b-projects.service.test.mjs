@@ -59,12 +59,48 @@ function projectRecord(overrides = {}) {
     roomType: RoomType.LIVING_ROOM,
     style: InteriorStyle.SCANDI,
     managerComment: null,
+    sourceImageUrl: null,
     status: B2BProjectStatus.DRAFT,
     roomProjectId: null,
     products: [],
     ...overrides,
   };
 }
+
+test('create persists an optional empty-room sourceImageUrl', async () => {
+  let createArgs;
+  const service = new B2BProjectsService(
+    {
+      supplier: { findFirst: async () => ({ id: 'supplier-1' }) },
+      b2BProject: {
+        create: async (args) => {
+          createArgs = args;
+          return projectRecord({
+            sourceImageUrl: args.data.sourceImageUrl,
+          });
+        },
+      },
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await service.create(
+    {
+      name: 'Новая линейка',
+      partnerName: 'Мебельный дом',
+      supplierId: 'supplier-1',
+      roomType: RoomType.LIVING_ROOM,
+      style: InteriorStyle.SCANDI,
+      sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
+    },
+    'manager-1',
+  );
+
+  assert.equal(
+    createArgs.data.sourceImageUrl,
+    'https://cdn.example.com/empty-room.jpg',
+  );
+});
 
 test('replaceProducts rejects products that are unavailable or outside the project supplier', async () => {
   const tx = {
@@ -92,6 +128,74 @@ test('replaceProducts rejects products that are unavailable or outside the proje
       'missing-product',
     ]),
     (error) => error instanceof BadRequestException,
+  );
+});
+
+test('replaceProducts accepts ten products when the project has no room photo', async () => {
+  const selected = Array.from({ length: 10 }, (_, index) =>
+    product(`product-${index + 1}`),
+  );
+  let savedProducts;
+  const tx = {
+    product: { findMany: async () => selected },
+    b2BProjectProduct: {
+      deleteMany: async () => undefined,
+      createMany: async ({ data }) => {
+        savedProducts = data;
+      },
+    },
+    b2BProject: {
+      updateMany: async () => ({ count: 1 }),
+      findUnique: async () => projectRecord(),
+      update: async () =>
+        projectRecord({ status: B2BProjectStatus.READY_TO_GENERATE }),
+    },
+  };
+  const service = new B2BProjectsService(
+    { $transaction: async (callback) => callback(tx) },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await service.replaceProducts(
+    'b2b-project-1',
+    selected.map(({ id }) => id),
+  );
+
+  assert.equal(savedProducts.length, 10);
+});
+
+test('replaceProducts rejects ten products when the project has a room photo', async () => {
+  const selected = Array.from({ length: 10 }, (_, index) =>
+    product(`product-${index + 1}`),
+  );
+  const tx = {
+    product: {
+      findMany: async () =>
+        assert.fail('the photo-specific cap must be checked first'),
+    },
+    b2BProjectProduct: {
+      deleteMany: async () =>
+        assert.fail('an oversized selection must not be saved'),
+    },
+    b2BProject: {
+      updateMany: async () => ({ count: 1 }),
+      findUnique: async () =>
+        projectRecord({
+          sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
+        }),
+    },
+  };
+  const service = new B2BProjectsService(
+    { $transaction: async (callback) => callback(tx) },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await assert.rejects(
+    service.replaceProducts(
+      'b2b-project-1',
+      selected.map(({ id }) => id),
+    ),
+    /Choose between 1 and 9 products/,
   );
 });
 
@@ -241,6 +345,7 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
   const fixedProducts = [product('product-1'), product('product-2')];
   const project = projectRecord({
     status: B2BProjectStatus.READY_TO_GENERATE,
+    sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
     products: fixedProducts.map((value, sortOrder) => ({
       productId: value.id,
       sortOrder,
@@ -302,6 +407,13 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
     GenerationScenario.B2B_FURNITURE_LINE,
   );
   assert.equal(generationCall[1].data.requestedVariants, 2);
+  const roomProjectCall = calls.find(
+    ([name]) => name === 'roomProject.create',
+  );
+  assert.equal(
+    roomProjectCall[1].data.sourceImageUrl,
+    'https://cdn.example.com/empty-room.jpg',
+  );
   assert.deepEqual(generationCall[1].data.inputParams.productIds, [
     'product-1',
     'product-2',
@@ -349,10 +461,13 @@ test('startGeneration retries a failed project with the saved selection', async 
   const fixedProduct = product('product-1');
   const project = projectRecord({
     status: B2BProjectStatus.FAILED,
+    roomProjectId: 'room-project-existing',
+    sourceImageUrl: 'https://cdn.example.com/updated-empty-room.jpg',
     products: [
       { productId: fixedProduct.id, sortOrder: 0, product: fixedProduct },
     ],
   });
+  let roomProjectUpdate;
   const tx = {
     product: { findMany: async () => [fixedProduct] },
     b2BProject: {
@@ -367,7 +482,10 @@ test('startGeneration retries a failed project with the saved selection', async 
       update: async () => project,
     },
     roomProject: {
-      create: async ({ data }) => ({ id: 'room-project-retry', ...data }),
+      update: async (args) => {
+        roomProjectUpdate = args;
+        return { id: 'room-project-existing', ...args.data };
+      },
     },
     generationJob: {
       create: async ({ data }) => ({ id: 'job-retry', ...data }),
@@ -385,6 +503,10 @@ test('startGeneration retries a failed project with the saved selection', async 
 
   assert.equal(result.job.id, 'job-retry');
   assert.deepEqual(queued, ['job-retry']);
+  assert.equal(
+    roomProjectUpdate.data.sourceImageUrl,
+    'https://cdn.example.com/updated-empty-room.jpg',
+  );
 });
 
 test('downloadVariant proxies only a variant belonging to the B2B project', async () => {

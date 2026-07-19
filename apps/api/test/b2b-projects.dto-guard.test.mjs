@@ -58,10 +58,15 @@ test('CreateB2BProjectDto accepts the furniture project fields and rejects inval
     roomType: 'LIVING_ROOM',
     style: 'SCANDI',
     managerComment: 'Светлая сцена',
+    sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
   });
 
   assert.equal(dto.name, 'Новая линейка');
   assert.equal(dto.roomType, 'LIVING_ROOM');
+  assert.equal(
+    dto.sourceImageUrl,
+    'https://cdn.example.com/empty-room.jpg',
+  );
 
   for (const input of [
     {
@@ -70,6 +75,14 @@ test('CreateB2BProjectDto accepts the furniture project fields and rejects inval
       supplierId: 'not-a-uuid',
       roomType: 'GARAGE',
       style: 'SCANDI',
+    },
+    {
+      name: 'Проект',
+      partnerName: 'Партнёр',
+      supplierId: '4f06c408-13ee-4e77-8a78-68ca8d8501d2',
+      roomType: 'LIVING_ROOM',
+      style: 'SCANDI',
+      sourceImageUrl: 'not-a-url',
     },
     {
       name: 'Проект',
@@ -87,11 +100,12 @@ test('CreateB2BProjectDto accepts the furniture project fields and rejects inval
   }
 });
 
-test('ReplaceB2BProjectProductsDto requires 1–6 unique product ids', async () => {
-  const ids = [
-    '2c11ad6d-7a82-4928-b3e9-b7e888d6517b',
-    '9c338e7d-3d61-42ae-b986-a12340b58dca',
-  ];
+test('ReplaceB2BProjectProductsDto requires 1–10 unique product ids', async () => {
+  const ids = Array.from(
+    { length: 10 },
+    (_, index) =>
+      `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+  );
 
   assert.deepEqual(
     (await transform(ReplaceB2BProjectProductsDto, { productIds: ids }))
@@ -103,7 +117,7 @@ test('ReplaceB2BProjectProductsDto requires 1–6 unique product ids', async () 
     [],
     [...ids, ids[0]],
     Array.from(
-      { length: 7 },
+      { length: 11 },
       (_, index) => `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
     ),
   ]) {
