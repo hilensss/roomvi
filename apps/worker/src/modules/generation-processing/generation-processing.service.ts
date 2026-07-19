@@ -347,11 +347,13 @@ export class GenerationProcessingService {
 
       for (const generatedVariant of generatedVariants) {
         const variantNumber = createdVariants.length + 1;
-        const variantProducts = generatedVariant.productIds.length
-          ? (generatedVariant.productIds
-              .map((id) => productById.get(id))
-              .filter(Boolean) as Product[])
-          : [];
+        const variantProducts =
+          fixedProducts ??
+          (generatedVariant.productIds.length
+            ? (generatedVariant.productIds
+                .map((id) => productById.get(id))
+                .filter(Boolean) as Product[])
+            : []);
 
         const totalPrice = variantProducts.reduce((sum, p) => sum + p.price, 0);
 

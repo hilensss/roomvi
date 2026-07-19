@@ -169,7 +169,9 @@ function createGeneratedVariant(input, variantNumber) {
 }
 
 test('furniture jobs generate exactly two variants from the unchanged manual product set', async () => {
-  const fixedProducts = [createProduct(11), createProduct(12)];
+  const fixedProducts = Array.from({ length: 6 }, (_, index) =>
+    createProduct(index + 11),
+  );
   const providerInputs = [];
   const b2bProject = {
     id: 'b2b-project-1',
@@ -188,7 +190,12 @@ test('furniture jobs generate exactly two variants from the unchanged manual pro
   } = createHarness(
     async (input) => {
       providerInputs.push(input);
-      return [createGeneratedVariant(input, getVariantNumber(input))];
+      return [
+        {
+          ...createGeneratedVariant(input, getVariantNumber(input)),
+          productIds: [input.products[0].id],
+        },
+      ];
     },
     {
       scenario: GenerationScenario.B2B_FURNITURE_LINE,
@@ -204,8 +211,22 @@ test('furniture jobs generate exactly two variants from the unchanged manual pro
   assert.deepEqual(
     providerInputs.map((input) => input.products.map(({ id }) => id)),
     [
-      ['product-11', 'product-12'],
-      ['product-11', 'product-12'],
+      [
+        'product-11',
+        'product-12',
+        'product-13',
+        'product-14',
+        'product-15',
+        'product-16',
+      ],
+      [
+        'product-11',
+        'product-12',
+        'product-13',
+        'product-14',
+        'product-15',
+        'product-16',
+      ],
     ],
   );
   assert.equal(createdVariants.length, 2);
@@ -214,8 +235,22 @@ test('furniture jobs generate exactly two variants from the unchanged manual pro
       variant.products.create.map(({ productId }) => productId),
     ),
     [
-      ['product-11', 'product-12'],
-      ['product-11', 'product-12'],
+      [
+        'product-11',
+        'product-12',
+        'product-13',
+        'product-14',
+        'product-15',
+        'product-16',
+      ],
+      [
+        'product-11',
+        'product-12',
+        'product-13',
+        'product-14',
+        'product-15',
+        'product-16',
+      ],
     ],
   );
   assert.equal(

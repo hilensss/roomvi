@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import {
   B2BProjectStatus,
   GenerationScenario,
@@ -150,6 +153,10 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
       },
     },
     b2BProject: {
+      updateMany: async (args) => {
+        calls.push(['b2BProject.updateMany', args]);
+        return { count: 1 };
+      },
       update: async (args) => {
         calls.push(['b2BProject.update', args]);
         return { ...project, ...args.data };
@@ -184,4 +191,35 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
   ]);
   assert.deepEqual(queued, ['job-1']);
   assert.equal(result.job.id, 'job-1');
+});
+
+test('startGeneration atomically rejects a concurrent second launch', async () => {
+  const fixedProduct = product('product-1');
+  const project = projectRecord({
+    status: B2BProjectStatus.READY_TO_GENERATE,
+    products: [
+      { productId: fixedProduct.id, sortOrder: 0, product: fixedProduct },
+    ],
+  });
+  const tx = {
+    b2BProject: {
+      updateMany: async () => ({ count: 0 }),
+    },
+    roomProject: {
+      create: async () => assert.fail('room project must not be created'),
+    },
+  };
+  const service = new B2BProjectsService(
+    {
+      b2BProject: { findUnique: async () => project },
+      product: { findMany: async () => [fixedProduct] },
+      $transaction: async (callback) => callback(tx),
+    },
+    { enqueueGeneration: async () => assert.fail('job must not be enqueued') },
+  );
+
+  await assert.rejects(
+    service.startGeneration('b2b-project-1', 'manager-1'),
+    (error) => error instanceof ConflictException,
+  );
 });

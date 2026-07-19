@@ -241,6 +241,17 @@ export class B2BProjectsService {
     await this.loadValidProducts(project.supplierId, productIds);
 
     const result = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2BProject.updateMany({
+        where: {
+          id,
+          status: B2BProjectStatus.READY_TO_GENERATE,
+        },
+        data: { status: B2BProjectStatus.GENERATING },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException('Project generation already started');
+      }
+
       const roomProject = project.roomProjectId
         ? await tx.roomProject.update({
             where: { id: project.roomProjectId },
@@ -277,7 +288,6 @@ export class B2BProjectsService {
         where: { id },
         data: {
           roomProjectId: roomProject.id,
-          status: B2BProjectStatus.GENERATING,
         },
       });
 
