@@ -17,6 +17,7 @@ import {
   StockStatus,
   SupplierStatus,
 } from '@roomvi/database';
+import { Readable, Transform } from 'node:stream';
 import { GenerationQueueService } from '../generation-queue/generation-queue.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.js';
@@ -29,6 +30,8 @@ const mutableProjectStatuses = [
   B2BProjectStatus.READY_TO_GENERATE,
   B2BProjectStatus.FAILED,
 ] as const;
+const DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = 10_000;
 
 const projectDetailInclude = {
   supplier: true,
@@ -138,12 +141,19 @@ export class B2BProjectsService {
   }
 
   async update(id: string, dto: UpdateB2BProjectDto) {
+    const currentProject = await this.requireProject(id);
     if (dto.supplierId) await this.requireActiveSupplier(dto.supplierId);
-    const supplierMayHaveChanged = dto.supplierId !== undefined;
+    const supplierChanged =
+      dto.supplierId !== undefined &&
+      dto.supplierId !== currentProject.supplierId;
 
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.b2BProject.updateMany({
-        where: { id, status: { in: [...mutableProjectStatuses] } },
+        where: {
+          id,
+          supplierId: currentProject.supplierId,
+          status: { in: [...mutableProjectStatuses] },
+        },
         data: {
           ...dto,
           name: dto.name?.trim(),
@@ -152,16 +162,14 @@ export class B2BProjectsService {
             dto.managerComment === undefined
               ? undefined
               : dto.managerComment.trim() || null,
-          ...(supplierMayHaveChanged
-            ? { status: B2BProjectStatus.DRAFT }
-            : {}),
+          ...(supplierChanged ? { status: B2BProjectStatus.DRAFT } : {}),
         },
       });
       if (updated.count !== 1) {
         await this.throwProjectMutationConflict(tx, id);
       }
 
-      if (supplierMayHaveChanged) {
+      if (supplierChanged) {
         await tx.b2BProjectProduct.deleteMany({
           where: { b2bProjectId: id },
         });
@@ -354,9 +362,13 @@ export class B2BProjectsService {
     });
     if (!variant) throw new NotFoundException('Design variant not found');
 
+    const imageUrl = this.requireAllowedDownloadUrl(variant.imageUrl);
     let response: Response;
     try {
-      response = await fetch(variant.imageUrl);
+      response = await fetch(imageUrl, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+      });
     } catch {
       throw new BadGatewayException('Generated image is unavailable');
     }
@@ -365,12 +377,32 @@ export class B2BProjectsService {
     }
 
     const contentType =
-      response.headers.get('content-type') ?? 'application/octet-stream';
+      response.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
+    if (!contentType.startsWith('image/')) {
+      throw new BadGatewayException('Generated file is not an image');
+    }
+
+    const contentLengthHeader = response.headers.get('content-length');
+    const contentLength = contentLengthHeader
+      ? Number(contentLengthHeader)
+      : undefined;
+    if (
+      contentLength !== undefined &&
+      (!Number.isSafeInteger(contentLength) ||
+        contentLength < 0 ||
+        contentLength > DOWNLOAD_MAX_BYTES)
+    ) {
+      throw new BadGatewayException('Generated image is too large');
+    }
+    if (!response.body) {
+      throw new BadGatewayException('Generated image is unavailable');
+    }
 
     return {
-      data: Buffer.from(await response.arrayBuffer()),
+      stream: this.createLimitedDownloadStream(response.body),
       contentType,
       fileName: `roomvi-${variant.id}.${this.getImageExtension(contentType)}`,
+      contentLength,
     };
   }
 
@@ -446,6 +478,55 @@ export class B2BProjectsService {
     if (contentType.includes('png')) return 'png';
     if (contentType.includes('webp')) return 'webp';
     return 'bin';
+  }
+
+  private requireAllowedDownloadUrl(imageUrl: string) {
+    let url: URL;
+    try {
+      url = new URL(imageUrl);
+    } catch {
+      throw new BadGatewayException('Generated image URL is invalid');
+    }
+
+    const allowedOrigins = new Set<string>();
+    const configuredOrigins = [
+      process.env.S3_PUBLIC_BASE_URL,
+      ...(process.env.B2B_DOWNLOAD_ALLOWED_ORIGINS?.split(',') ?? []),
+    ];
+    if ((process.env.GENERATION_PROVIDER ?? 'MOCK') === 'MOCK') {
+      configuredOrigins.push('https://placehold.co');
+    }
+
+    for (const configured of configuredOrigins) {
+      if (!configured?.trim()) continue;
+      try {
+        allowedOrigins.add(new URL(configured.trim()).origin);
+      } catch {
+        continue;
+      }
+    }
+
+    if (!allowedOrigins.has(url.origin)) {
+      throw new BadGatewayException('Generated image origin is not allowed');
+    }
+
+    return url;
+  }
+
+  private createLimitedDownloadStream(body: ReadableStream<Uint8Array>) {
+    let receivedBytes = 0;
+    const limiter = new Transform({
+      transform(chunk, _encoding, callback) {
+        receivedBytes += chunk.length;
+        if (receivedBytes > DOWNLOAD_MAX_BYTES) {
+          callback(new Error('Generated image exceeded the proxy limit'));
+          return;
+        }
+        callback(null, chunk);
+      },
+    });
+
+    return Readable.fromWeb(body).pipe(limiter);
   }
 
   private createProductSnapshot(

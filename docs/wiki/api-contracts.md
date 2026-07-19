@@ -36,7 +36,7 @@ Public item не содержит `externalProductId`, `supplierNameSnapshot`, `
 - `GET /manager/b2b-projects/:id/catalog?limit=40&offset=0&search=` — только активные, AI-eligible товары в наличии, с изображениями, принадлежащие поставщику проекта.
 - `PUT /manager/b2b-projects/:id/products` — заменить ручную подборку. Body: `{ productIds: string[] }`, от 1 до 6 уникальных UUID.
 - `POST /manager/b2b-projects/:id/generate` — атомарно захватить проект, повторно проверить подборку и создать `B2B_FURNITURE_LINE` job с `requestedVariants = 2`. Допустим для `READY_TO_GENERATE` и повторно для `FAILED`.
-- `GET /manager/b2b-projects/:id/variants/:variantId/download` — проверить принадлежность варианта проекту и вернуть изображение с `Content-Disposition: attachment`.
+- `GET /manager/b2b-projects/:id/variants/:variantId/download` — проверить принадлежность варианта проекту и вернуть изображение с `Content-Disposition: attachment`. Proxy принимает только image-ответы с origin из `S3_PUBLIC_BASE_URL` или `B2B_DOWNLOAD_ALLOWED_ORIGINS`, запрещает redirects, ограничивает запрос десятью секундами, поток — 20 MiB.
 
 Для обеих визуализаций worker использует одну и ту же сохранённую подборку и не вызывает автоматический product matching. Каждый подготовленный запрос должен вернуть ровно одну визуализацию. В `DesignVariantProduct` сохраняются товарные snapshots, которые используются в B2B-результате вместо изменяемых live-данных каталога.
 

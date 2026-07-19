@@ -8,10 +8,10 @@ import {
   Put,
   Query,
   Req,
-  Res,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { JwtUser } from '../auth/types/jwt-user.type.js';
 import { B2BProjectsService } from './b2b-projects.service.js';
@@ -79,14 +79,14 @@ export class B2BProjectsController {
   async downloadVariant(
     @Param('id') id: string,
     @Param('variantId') variantId: string,
-    @Res() response: Response,
   ) {
     const file = await this.b2bProjectsService.downloadVariant(id, variantId);
-    response.setHeader('Content-Type', file.contentType);
-    response.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${file.fileName}"`,
-    );
-    response.send(file.data);
+    return new StreamableFile(file.stream, {
+      type: file.contentType,
+      disposition: `attachment; filename="${file.fileName}"`,
+      ...(file.contentLength === undefined
+        ? {}
+        : { length: file.contentLength }),
+    });
   }
 }

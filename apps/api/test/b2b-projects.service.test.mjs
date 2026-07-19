@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   NotFoundException,
@@ -13,6 +14,7 @@ import {
   RoomType,
   StockStatus,
 } from '@roomvi/database';
+import { Readable } from 'node:stream';
 
 const { B2BProjectsService } = await import(
   '../dist/modules/b2b-projects/b2b-projects.service.js'
@@ -199,6 +201,42 @@ test('update cannot overwrite a project claimed by generation', async () => {
   );
 });
 
+test('update preserves the selection when supplierId is unchanged', async () => {
+  let selectionDeleted = false;
+  let updateArgs;
+  const readyProject = projectRecord({
+    status: B2BProjectStatus.READY_TO_GENERATE,
+  });
+  const tx = {
+    b2BProject: {
+      updateMany: async (args) => {
+        updateArgs = args;
+        return { count: 1 };
+      },
+      findUnique: async () => readyProject,
+    },
+    b2BProjectProduct: {
+      deleteMany: async () => {
+        selectionDeleted = true;
+      },
+    },
+  };
+  const service = new B2BProjectsService(
+    {
+      b2BProject: { findUnique: async () => readyProject },
+      supplier: { findFirst: async () => ({ id: 'supplier-1' }) },
+      $transaction: async (callback) => callback(tx),
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await service.update('b2b-project-1', { supplierId: 'supplier-1' });
+
+  assert.equal(selectionDeleted, false);
+  assert.equal(updateArgs.data.status, undefined);
+  assert.equal(updateArgs.where.supplierId, 'supplier-1');
+});
+
 test('startGeneration revalidates the fixed set and enqueues exactly two furniture variants', async () => {
   const fixedProducts = [product('product-1'), product('product-2')];
   const project = projectRecord({
@@ -351,11 +389,19 @@ test('startGeneration retries a failed project with the saved selection', async 
 
 test('downloadVariant proxies only a variant belonging to the B2B project', async () => {
   const originalFetch = globalThis.fetch;
+  const originalStorageBaseUrl = process.env.S3_PUBLIC_BASE_URL;
   let variantQuery;
-  globalThis.fetch = async () =>
-    new Response(Uint8Array.from([1, 2, 3]), {
-      headers: { 'content-type': 'image/jpeg' },
+  let fetchOptions;
+  process.env.S3_PUBLIC_BASE_URL = 'https://cdn.example.com';
+  globalThis.fetch = async (_url, options) => {
+    fetchOptions = options;
+    return new Response(Uint8Array.from([1, 2, 3]), {
+      headers: {
+        'content-type': 'image/jpeg',
+        'content-length': '3',
+      },
     });
+  };
 
   try {
     const service = new B2BProjectsService(
@@ -384,9 +430,19 @@ test('downloadVariant proxies only a variant belonging to the B2B project', asyn
     });
     assert.equal(result.contentType, 'image/jpeg');
     assert.equal(result.fileName, 'roomvi-variant-1.jpg');
-    assert.deepEqual([...result.data], [1, 2, 3]);
+    assert.equal(result.contentLength, 3);
+    assert.equal(fetchOptions.redirect, 'error');
+    assert.ok(fetchOptions.signal instanceof AbortSignal);
+    const bytes = [];
+    for await (const chunk of result.stream) bytes.push(...chunk);
+    assert.deepEqual(bytes, [1, 2, 3]);
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalStorageBaseUrl === undefined) {
+      delete process.env.S3_PUBLIC_BASE_URL;
+    } else {
+      process.env.S3_PUBLIC_BASE_URL = originalStorageBaseUrl;
+    }
   }
 });
 
@@ -404,28 +460,103 @@ test('downloadVariant hides variants outside the B2B project', async () => {
   );
 });
 
+test('downloadVariant rejects image URLs outside configured origins', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalStorageBaseUrl = process.env.S3_PUBLIC_BASE_URL;
+  let fetchCalled = false;
+  process.env.S3_PUBLIC_BASE_URL = 'https://cdn.example.com';
+  globalThis.fetch = async () => {
+    fetchCalled = true;
+    return new Response('should not be fetched');
+  };
+
+  try {
+    const service = new B2BProjectsService(
+      {
+        designVariant: {
+          findFirst: async () => ({
+            id: 'variant-1',
+            imageUrl: 'http://127.0.0.1/private',
+          }),
+        },
+      },
+      { enqueueGeneration: async () => undefined },
+    );
+
+    await assert.rejects(
+      service.downloadVariant('b2b-project-1', 'variant-1'),
+      (error) => error instanceof BadGatewayException,
+    );
+    assert.equal(fetchCalled, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalStorageBaseUrl === undefined) {
+      delete process.env.S3_PUBLIC_BASE_URL;
+    } else {
+      process.env.S3_PUBLIC_BASE_URL = originalStorageBaseUrl;
+    }
+  }
+});
+
+test('downloadVariant rejects a declared image larger than the proxy limit', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalStorageBaseUrl = process.env.S3_PUBLIC_BASE_URL;
+  process.env.S3_PUBLIC_BASE_URL = 'https://cdn.example.com';
+  globalThis.fetch = async () =>
+    new Response(Uint8Array.from([1]), {
+      headers: {
+        'content-type': 'image/png',
+        'content-length': String(21 * 1024 * 1024),
+      },
+    });
+
+  try {
+    const service = new B2BProjectsService(
+      {
+        designVariant: {
+          findFirst: async () => ({
+            id: 'variant-1',
+            imageUrl: 'https://cdn.example.com/variant-1.png',
+          }),
+        },
+      },
+      { enqueueGeneration: async () => undefined },
+    );
+
+    await assert.rejects(
+      service.downloadVariant('b2b-project-1', 'variant-1'),
+      (error) => error instanceof BadGatewayException,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalStorageBaseUrl === undefined) {
+      delete process.env.S3_PUBLIC_BASE_URL;
+    } else {
+      process.env.S3_PUBLIC_BASE_URL = originalStorageBaseUrl;
+    }
+  }
+});
+
 test('download endpoint forces an attachment response', async () => {
-  const headers = new Map();
-  let body;
   const controller = new B2BProjectsController({
     downloadVariant: async () => ({
-      data: Buffer.from([1, 2, 3]),
+      stream: Readable.from([Buffer.from([1, 2, 3])]),
       contentType: 'image/png',
       fileName: 'roomvi-variant-1.png',
+      contentLength: 3,
     }),
   });
 
-  await controller.downloadVariant('project-1', 'variant-1', {
-    setHeader: (name, value) => headers.set(name, value),
-    send: (value) => {
-      body = value;
-    },
-  });
+  const file = await controller.downloadVariant('project-1', 'variant-1');
+  const headers = file.getHeaders();
 
-  assert.equal(headers.get('Content-Type'), 'image/png');
+  assert.equal(headers.type, 'image/png');
   assert.equal(
-    headers.get('Content-Disposition'),
+    headers.disposition,
     'attachment; filename="roomvi-variant-1.png"',
   );
-  assert.deepEqual([...body], [1, 2, 3]);
+  assert.equal(headers.length, 3);
+  const bytes = [];
+  for await (const chunk of file.getStream()) bytes.push(...chunk);
+  assert.deepEqual(bytes, [1, 2, 3]);
 });
