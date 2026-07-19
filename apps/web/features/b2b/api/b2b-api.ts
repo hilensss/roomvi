@@ -1,4 +1,4 @@
-import { apiFetch } from '@/shared/api/api-client';
+import { apiFetch, buildApiUrl } from '@/shared/api/api-client';
 import type {
   B2BProject,
   B2BProjectCatalogResponse,
@@ -60,5 +60,14 @@ export function startB2BProjectGeneration(projectId: string) {
   return apiFetch<StartB2BGenerationResponse>(
     `/manager/b2b-projects/${projectId}/generate`,
     { method: 'POST' },
+  );
+}
+
+export function getB2BVariantDownloadUrl(
+  projectId: string,
+  variantId: string,
+) {
+  return buildApiUrl(
+    `/manager/b2b-projects/${projectId}/variants/${variantId}/download`,
   );
 }

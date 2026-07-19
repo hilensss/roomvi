@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
-vi.mock('@/shared/api/api-client', () => ({ apiFetch }));
+const { apiFetch, buildApiUrl } = vi.hoisted(() => ({
+  apiFetch: vi.fn(),
+  buildApiUrl: vi.fn((path: string) => `https://api.example.com${path}`),
+}));
+vi.mock('@/shared/api/api-client', () => ({ apiFetch, buildApiUrl }));
 
 import {
   createB2BProject,
+  getB2BVariantDownloadUrl,
   getB2BProject,
   getB2BProjectCatalog,
   listB2BProjects,
@@ -77,6 +81,12 @@ describe('b2b api', () => {
       3,
       '/manager/b2b-projects/project-1/generate',
       { method: 'POST' },
+    );
+  });
+
+  it('builds a protected attachment endpoint for generated images', () => {
+    expect(getB2BVariantDownloadUrl('project-1', 'variant-1')).toBe(
+      'https://api.example.com/manager/b2b-projects/project-1/variants/variant-1/download',
     );
   });
 });

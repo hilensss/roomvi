@@ -125,7 +125,13 @@ export type DesignVariantProduct = {
   role: string | null;
   x: number | null;
   y: number | null;
-  productSnapshot: unknown;
+  productSnapshot: {
+    id: string;
+    title: string;
+    price: number;
+    currency: string;
+    [key: string]: unknown;
+  };
   product: Product;
 };
 

@@ -4,6 +4,10 @@ if (!API_URL) {
   throw new Error('NEXT_PUBLIC_API_URL is not set');
 }
 
+export function buildApiUrl(path: string) {
+  return `${API_URL}${path}`;
+}
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -72,7 +76,7 @@ export async function apiFetch<T>(
   path: string,
   options: ApiFetchOptions = {},
 ): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...options,
     credentials: 'include',
     headers: buildHeaders(options),
@@ -81,7 +85,7 @@ export async function apiFetch<T>(
   if (response.status === 401 && !options.skipAuthRefresh) {
     await refreshAuthSession();
 
-    const retryResponse = await fetch(`${API_URL}${path}`, {
+    const retryResponse = await fetch(buildApiUrl(path), {
       ...options,
       credentials: 'include',
       headers: buildHeaders(options),

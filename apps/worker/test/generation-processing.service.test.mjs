@@ -514,9 +514,49 @@ test('fails the job when the provider produces no variants', async () => {
 
   await assert.rejects(
     service.processGenerationJob('job-1'),
-    /No generated variants were produced/,
+    /exactly one generated variant/,
   );
 
+  assert.equal(
+    jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
+    true,
+  );
+});
+
+test('fails the whole job when one planned variant returns no output', async () => {
+  const { service, createdVariants, jobUpdates } = createHarness(
+    async (input) =>
+      getVariantNumber(input) === 1
+        ? []
+        : [createGeneratedVariant(input, getVariantNumber(input))],
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /exactly one generated variant/,
+  );
+
+  assert.equal(createdVariants.length, 0);
+  assert.equal(
+    jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
+    true,
+  );
+});
+
+test('fails the whole job when a planned provider call returns extra output', async () => {
+  const { service, createdVariants, jobUpdates } = createHarness(
+    async (input) => [
+      createGeneratedVariant(input, getVariantNumber(input)),
+      createGeneratedVariant(input, getVariantNumber(input)),
+    ],
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /exactly one generated variant/,
+  );
+
+  assert.equal(createdVariants.length, 0);
   assert.equal(
     jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
     true,

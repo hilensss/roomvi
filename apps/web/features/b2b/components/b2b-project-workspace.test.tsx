@@ -85,6 +85,7 @@ beforeEach(() => {
   mocks.project.status = 'DRAFT';
   mocks.project.products = [];
   mocks.project.roomProject = null;
+  mocks.project.products = [];
 });
 
 it('limits manual selection to six products and saves their exact ids', async () => {
@@ -147,7 +148,12 @@ it('renders generated designs with their product selection and download links', 
                 role: 'SOFA',
                 x: null,
                 y: null,
-                productSnapshot: {},
+                productSnapshot: {
+                  id: 'product-1',
+                  title: 'Снимок товара 1',
+                  price: 7777,
+                  currency: 'RUB',
+                },
                 product: product(1),
               },
             ],
@@ -162,9 +168,34 @@ it('renders generated designs with their product selection and download links', 
   renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
 
   expect(screen.getByText('Вариант 1')).toBeInTheDocument();
-  expect(screen.getByText('Товар 1')).toBeInTheDocument();
+  expect(screen.getByText('Снимок товара 1')).toBeInTheDocument();
+  expect(screen.getByText('7 777 ₽')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Скачать визуализацию' })).toHaveAttribute(
     'href',
-    'https://example.com/design.jpg',
+    'http://api.test/manager/b2b-projects/project-1/variants/variant-1/download',
   );
+});
+
+it('retries a failed generation with the unchanged saved selection', async () => {
+  mocks.project.status = 'FAILED';
+  mocks.project.products = [
+    {
+      id: 'selection-1',
+      productId: 'product-1',
+      sortOrder: 0,
+      productSnapshot: {},
+      product: product(1),
+    },
+  ];
+  mocks.start.mockResolvedValue({});
+  const user = userEvent.setup();
+
+  renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
+
+  const retryButton = screen.getByRole('button', {
+    name: 'Повторить 2 визуализации',
+  });
+  expect(retryButton).toBeEnabled();
+  await user.click(retryButton);
+  expect(mocks.start).toHaveBeenCalledWith('project-1');
 });

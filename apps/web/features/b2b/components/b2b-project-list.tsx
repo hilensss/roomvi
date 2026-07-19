@@ -76,7 +76,7 @@ export function B2BProjectList() {
                 <div>
                   <dt className="text-ink-soft">Товаров</dt>
                   <dd className="mt-1 font-medium text-ink">
-                    {project._count?.products ?? project.products?.length ?? 0}
+                    {project._count.products}
                   </dd>
                 </div>
               </dl>

@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -22,6 +23,12 @@ import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.j
 import { CreateB2BProjectDto } from './dto/create-b2b-project.dto.js';
 import { ListB2BProjectsQueryDto } from './dto/list-b2b-projects-query.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
+
+const mutableProjectStatuses = [
+  B2BProjectStatus.DRAFT,
+  B2BProjectStatus.READY_TO_GENERATE,
+  B2BProjectStatus.FAILED,
+] as const;
 
 const projectDetailInclude = {
   supplier: true,
@@ -131,22 +138,12 @@ export class B2BProjectsService {
   }
 
   async update(id: string, dto: UpdateB2BProjectDto) {
-    const project = await this.requireProject(id);
-    this.requireMutable(project.status);
-
     if (dto.supplierId) await this.requireActiveSupplier(dto.supplierId);
-    const supplierChanged =
-      dto.supplierId !== undefined && dto.supplierId !== project.supplierId;
+    const supplierMayHaveChanged = dto.supplierId !== undefined;
 
     return this.prisma.$transaction(async (tx) => {
-      if (supplierChanged) {
-        await tx.b2BProjectProduct.deleteMany({
-          where: { b2bProjectId: id },
-        });
-      }
-
-      return tx.b2BProject.update({
-        where: { id },
+      const updated = await tx.b2BProject.updateMany({
+        where: { id, status: { in: [...mutableProjectStatuses] } },
         data: {
           ...dto,
           name: dto.name?.trim(),
@@ -155,10 +152,27 @@ export class B2BProjectsService {
             dto.managerComment === undefined
               ? undefined
               : dto.managerComment.trim() || null,
-          ...(supplierChanged ? { status: B2BProjectStatus.DRAFT } : {}),
+          ...(supplierMayHaveChanged
+            ? { status: B2BProjectStatus.DRAFT }
+            : {}),
         },
+      });
+      if (updated.count !== 1) {
+        await this.throwProjectMutationConflict(tx, id);
+      }
+
+      if (supplierMayHaveChanged) {
+        await tx.b2BProjectProduct.deleteMany({
+          where: { b2bProjectId: id },
+        });
+      }
+
+      const project = await tx.b2BProject.findUnique({
+        where: { id },
         include: projectDetailInclude,
       });
+      if (!project) throw new NotFoundException('B2B project not found');
+      return project;
     });
   }
 
@@ -194,14 +208,28 @@ export class B2BProjectsService {
   }
 
   async replaceProducts(id: string, productIds: string[]) {
-    const project = await this.requireProject(id);
-    this.requireMutable(project.status);
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2BProject.updateMany({
+        where: { id, status: { in: [...mutableProjectStatuses] } },
+        data: { status: B2BProjectStatus.DRAFT },
+      });
+      if (claimed.count !== 1) {
+        await this.throwProjectMutationConflict(tx, id);
+      }
 
-    const products = await this.loadValidProducts(project.supplierId, productIds);
-    const byId = new Map(products.map((product) => [product.id, product]));
-    const ordered = productIds.map((productId) => byId.get(productId)!);
+      const project = await tx.b2BProject.findUnique({
+        where: { id },
+        select: { supplierId: true },
+      });
+      if (!project) throw new NotFoundException('B2B project not found');
+      const products = await this.loadValidProducts(
+        project.supplierId,
+        productIds,
+        tx,
+      );
+      const byId = new Map(products.map((product) => [product.id, product]));
+      const ordered = productIds.map((productId) => byId.get(productId)!);
 
-    await this.prisma.$transaction(async (tx) => {
       await tx.b2BProjectProduct.deleteMany({
         where: { b2bProjectId: id },
       });
@@ -213,44 +241,44 @@ export class B2BProjectsService {
           productSnapshot: this.createProductSnapshot(product),
         })),
       });
-      await tx.b2BProject.update({
+      return tx.b2BProject.update({
         where: { id },
         data: { status: B2BProjectStatus.READY_TO_GENERATE },
+        include: projectDetailInclude,
       });
     });
-
-    return this.getById(id);
   }
 
   async startGeneration(id: string, managerId: string) {
-    const project = await this.prisma.b2BProject.findUnique({
-      where: { id },
-      include: {
-        products: {
-          orderBy: { sortOrder: 'asc' },
-          include: { product: true },
-        },
-      },
-    });
-    if (!project) throw new NotFoundException('B2B project not found');
-    if (project.status !== B2BProjectStatus.READY_TO_GENERATE) {
-      throw new ConflictException('Project is not ready for generation');
-    }
-
-    const productIds = project.products.map(({ productId }) => productId);
-    await this.loadValidProducts(project.supplierId, productIds);
-
     const result = await this.prisma.$transaction(async (tx) => {
       const claimed = await tx.b2BProject.updateMany({
         where: {
           id,
-          status: B2BProjectStatus.READY_TO_GENERATE,
+          status: {
+            in: [
+              B2BProjectStatus.READY_TO_GENERATE,
+              B2BProjectStatus.FAILED,
+            ],
+          },
         },
         data: { status: B2BProjectStatus.GENERATING },
       });
       if (claimed.count !== 1) {
-        throw new ConflictException('Project generation already started');
+        await this.throwProjectMutationConflict(tx, id);
       }
+
+      const project = await tx.b2BProject.findUnique({
+        where: { id },
+        include: {
+          products: {
+            orderBy: { sortOrder: 'asc' },
+            include: { product: true },
+          },
+        },
+      });
+      if (!project) throw new NotFoundException('B2B project not found');
+      const productIds = project.products.map(({ productId }) => productId);
+      await this.loadValidProducts(project.supplierId, productIds, tx);
 
       const roomProject = project.roomProjectId
         ? await tx.roomProject.update({
@@ -316,6 +344,36 @@ export class B2BProjectsService {
     return result;
   }
 
+  async downloadVariant(projectId: string, variantId: string) {
+    const variant = await this.prisma.designVariant.findFirst({
+      where: {
+        id: variantId,
+        roomProject: { b2bProject: { id: projectId } },
+      },
+      select: { id: true, imageUrl: true },
+    });
+    if (!variant) throw new NotFoundException('Design variant not found');
+
+    let response: Response;
+    try {
+      response = await fetch(variant.imageUrl);
+    } catch {
+      throw new BadGatewayException('Generated image is unavailable');
+    }
+    if (!response.ok) {
+      throw new BadGatewayException('Generated image is unavailable');
+    }
+
+    const contentType =
+      response.headers.get('content-type') ?? 'application/octet-stream';
+
+    return {
+      data: Buffer.from(await response.arrayBuffer()),
+      contentType,
+      fileName: `roomvi-${variant.id}.${this.getImageExtension(contentType)}`,
+    };
+  }
+
   private async requireProject(id: string) {
     const project = await this.prisma.b2BProject.findUnique({ where: { id } });
     if (!project) throw new NotFoundException('B2B project not found');
@@ -330,16 +388,23 @@ export class B2BProjectsService {
     if (!supplier) throw new BadRequestException('Active supplier not found');
   }
 
-  private requireMutable(status: B2BProjectStatus) {
-    if (
-      status === B2BProjectStatus.GENERATING ||
-      status === B2BProjectStatus.COMPLETED
-    ) {
-      throw new ConflictException('Generated project cannot be changed');
-    }
+  private async throwProjectMutationConflict(
+    tx: Prisma.TransactionClient,
+    id: string,
+  ): Promise<never> {
+    const project = await tx.b2BProject.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!project) throw new NotFoundException('B2B project not found');
+    throw new ConflictException('Project cannot be changed in its current state');
   }
 
-  private async loadValidProducts(supplierId: string, productIds: string[]) {
+  private async loadValidProducts(
+    supplierId: string,
+    productIds: string[],
+    client: Pick<Prisma.TransactionClient, 'product'> = this.prisma,
+  ) {
     const uniqueIds = [...new Set(productIds)];
     if (uniqueIds.length < 1 || uniqueIds.length > 6) {
       throw new BadRequestException('Choose between 1 and 6 products');
@@ -348,7 +413,7 @@ export class B2BProjectsService {
       throw new BadRequestException('Product selection must be unique');
     }
 
-    const products = await this.prisma.product.findMany({
+    const products = await client.product.findMany({
       where: {
         id: { in: uniqueIds },
         supplierId,
@@ -374,6 +439,13 @@ export class B2BProjectsService {
       );
     }
     return products;
+  }
+
+  private getImageExtension(contentType: string) {
+    if (contentType.includes('jpeg')) return 'jpg';
+    if (contentType.includes('png')) return 'png';
+    if (contentType.includes('webp')) return 'webp';
+    return 'bin';
   }
 
   private createProductSnapshot(

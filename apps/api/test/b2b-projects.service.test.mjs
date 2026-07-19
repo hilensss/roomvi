@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   BadRequestException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   B2BProjectStatus,
@@ -15,6 +16,9 @@ import {
 
 const { B2BProjectsService } = await import(
   '../dist/modules/b2b-projects/b2b-projects.service.js'
+);
+const { B2BProjectsController } = await import(
+  '../dist/modules/b2b-projects/b2b-projects.controller.js'
 );
 
 function product(id, overrides = {}) {
@@ -61,14 +65,20 @@ function projectRecord(overrides = {}) {
 }
 
 test('replaceProducts rejects products that are unavailable or outside the project supplier', async () => {
-  const prisma = {
+  const tx = {
     b2BProject: {
+      updateMany: async () => ({ count: 1 }),
       findUnique: async () => projectRecord(),
     },
     product: {
       findMany: async () => [product('product-1')],
     },
-    $transaction: async () => assert.fail('transaction should not start'),
+    b2BProjectProduct: {
+      deleteMany: async () => assert.fail('invalid selection must not be saved'),
+    },
+  };
+  const prisma = {
+    $transaction: async (callback) => callback(tx),
   };
   const service = new B2BProjectsService(prisma, {
     enqueueGeneration: async () => undefined,
@@ -87,11 +97,19 @@ test('replaceProducts snapshots the validated manual selection in its chosen ord
   const selected = [product('product-1'), product('product-2')];
   const calls = [];
   const tx = {
+    product: {
+      findMany: async () => [...selected].reverse(),
+    },
     b2BProjectProduct: {
       deleteMany: async (args) => calls.push(['deleteMany', args]),
       createMany: async (args) => calls.push(['createMany', args]),
     },
     b2BProject: {
+      updateMany: async (args) => {
+        calls.push(['updateMany', args]);
+        return { count: 1 };
+      },
+      findUnique: async () => projectRecord(),
       update: async (args) => {
         calls.push(['update', args]);
         return projectRecord({
@@ -104,9 +122,6 @@ test('replaceProducts snapshots the validated manual selection in its chosen ord
     b2BProject: {
       findUnique: async () => projectRecord(),
     },
-    product: {
-      findMany: async () => [...selected].reverse(),
-    },
     $transaction: async (callback) => callback(tx),
   };
   const service = new B2BProjectsService(prisma, {
@@ -118,13 +133,69 @@ test('replaceProducts snapshots the validated manual selection in its chosen ord
     'product-2',
   ]);
 
-  assert.equal(calls[1][1].data[0].productId, 'product-1');
-  assert.equal(calls[1][1].data[0].sortOrder, 0);
-  assert.equal(calls[1][1].data[0].productSnapshot.title, 'Product product-1');
-  assert.equal(calls[1][1].data[1].productId, 'product-2');
+  const createCall = calls.find(([name]) => name === 'createMany');
+  const updateCall = calls.find(([name]) => name === 'update');
+  assert.equal(createCall[1].data[0].productId, 'product-1');
+  assert.equal(createCall[1].data[0].sortOrder, 0);
   assert.equal(
-    calls[2][1].data.status,
+    createCall[1].data[0].productSnapshot.title,
+    'Product product-1',
+  );
+  assert.equal(createCall[1].data[1].productId, 'product-2');
+  assert.equal(
+    updateCall[1].data.status,
     B2BProjectStatus.READY_TO_GENERATE,
+  );
+});
+
+test('replaceProducts cannot overwrite a project claimed by generation', async () => {
+  let selectionDeleted = false;
+  const tx = {
+    b2BProject: {
+      updateMany: async () => ({ count: 0 }),
+      findUnique: async () =>
+        projectRecord({ status: B2BProjectStatus.GENERATING }),
+    },
+    b2BProjectProduct: {
+      deleteMany: async () => {
+        selectionDeleted = true;
+      },
+    },
+  };
+  const service = new B2BProjectsService(
+    {
+      b2BProject: { findUnique: async () => projectRecord() },
+      $transaction: async (callback) => callback(tx),
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await assert.rejects(
+    service.replaceProducts('b2b-project-1', ['product-1']),
+    (error) => error instanceof ConflictException,
+  );
+  assert.equal(selectionDeleted, false);
+});
+
+test('update cannot overwrite a project claimed by generation', async () => {
+  const tx = {
+    b2BProject: {
+      updateMany: async () => ({ count: 0 }),
+      findUnique: async () =>
+        projectRecord({ status: B2BProjectStatus.GENERATING }),
+    },
+  };
+  const service = new B2BProjectsService(
+    {
+      b2BProject: { findUnique: async () => projectRecord() },
+      $transaction: async (callback) => callback(tx),
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await assert.rejects(
+    service.update('b2b-project-1', { name: 'Новое имя' }),
+    (error) => error instanceof ConflictException,
   );
 });
 
@@ -140,6 +211,12 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
   });
   const calls = [];
   const tx = {
+    product: {
+      findMany: async () => {
+        calls.push(['product.findMany']);
+        return fixedProducts;
+      },
+    },
     roomProject: {
       create: async (args) => {
         calls.push(['roomProject.create', args]);
@@ -157,6 +234,10 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
         calls.push(['b2BProject.updateMany', args]);
         return { count: 1 };
       },
+      findUnique: async () => {
+        calls.push(['b2BProject.findUnique']);
+        return project;
+      },
       update: async (args) => {
         calls.push(['b2BProject.update', args]);
         return { ...project, ...args.data };
@@ -166,10 +247,8 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
   const queued = [];
   const prisma = {
     b2BProject: {
-      findUnique: async () => project,
-    },
-    product: {
-      findMany: async () => fixedProducts,
+      findUnique: async () =>
+        assert.fail('generation must read selection only after atomic claim'),
     },
     $transaction: async (callback) => callback(tx),
   };
@@ -191,6 +270,10 @@ test('startGeneration revalidates the fixed set and enqueues exactly two furnitu
   ]);
   assert.deepEqual(queued, ['job-1']);
   assert.equal(result.job.id, 'job-1');
+  assert.ok(
+    calls.findIndex(([name]) => name === 'b2BProject.updateMany') <
+      calls.findIndex(([name]) => name === 'b2BProject.findUnique'),
+  );
 });
 
 test('startGeneration atomically rejects a concurrent second launch', async () => {
@@ -204,6 +287,8 @@ test('startGeneration atomically rejects a concurrent second launch', async () =
   const tx = {
     b2BProject: {
       updateMany: async () => ({ count: 0 }),
+      findUnique: async () =>
+        projectRecord({ status: B2BProjectStatus.GENERATING }),
     },
     roomProject: {
       create: async () => assert.fail('room project must not be created'),
@@ -211,8 +296,6 @@ test('startGeneration atomically rejects a concurrent second launch', async () =
   };
   const service = new B2BProjectsService(
     {
-      b2BProject: { findUnique: async () => project },
-      product: { findMany: async () => [fixedProduct] },
       $transaction: async (callback) => callback(tx),
     },
     { enqueueGeneration: async () => assert.fail('job must not be enqueued') },
@@ -222,4 +305,127 @@ test('startGeneration atomically rejects a concurrent second launch', async () =
     service.startGeneration('b2b-project-1', 'manager-1'),
     (error) => error instanceof ConflictException,
   );
+});
+
+test('startGeneration retries a failed project with the saved selection', async () => {
+  const fixedProduct = product('product-1');
+  const project = projectRecord({
+    status: B2BProjectStatus.FAILED,
+    products: [
+      { productId: fixedProduct.id, sortOrder: 0, product: fixedProduct },
+    ],
+  });
+  const tx = {
+    product: { findMany: async () => [fixedProduct] },
+    b2BProject: {
+      updateMany: async (args) => {
+        assert.deepEqual(args.where.status.in, [
+          B2BProjectStatus.READY_TO_GENERATE,
+          B2BProjectStatus.FAILED,
+        ]);
+        return { count: 1 };
+      },
+      findUnique: async () => project,
+      update: async () => project,
+    },
+    roomProject: {
+      create: async ({ data }) => ({ id: 'room-project-retry', ...data }),
+    },
+    generationJob: {
+      create: async ({ data }) => ({ id: 'job-retry', ...data }),
+    },
+  };
+  const queued = [];
+  const service = new B2BProjectsService(
+    {
+      $transaction: async (callback) => callback(tx),
+    },
+    { enqueueGeneration: async (id) => queued.push(id) },
+  );
+
+  const result = await service.startGeneration('b2b-project-1', 'manager-1');
+
+  assert.equal(result.job.id, 'job-retry');
+  assert.deepEqual(queued, ['job-retry']);
+});
+
+test('downloadVariant proxies only a variant belonging to the B2B project', async () => {
+  const originalFetch = globalThis.fetch;
+  let variantQuery;
+  globalThis.fetch = async () =>
+    new Response(Uint8Array.from([1, 2, 3]), {
+      headers: { 'content-type': 'image/jpeg' },
+    });
+
+  try {
+    const service = new B2BProjectsService(
+      {
+        designVariant: {
+          findFirst: async (query) => {
+            variantQuery = query;
+            return {
+              id: 'variant-1',
+              imageUrl: 'https://cdn.example.com/variant-1.jpg',
+            };
+          },
+        },
+      },
+      { enqueueGeneration: async () => undefined },
+    );
+
+    const result = await service.downloadVariant(
+      'b2b-project-1',
+      'variant-1',
+    );
+
+    assert.deepEqual(variantQuery.where, {
+      id: 'variant-1',
+      roomProject: { b2bProject: { id: 'b2b-project-1' } },
+    });
+    assert.equal(result.contentType, 'image/jpeg');
+    assert.equal(result.fileName, 'roomvi-variant-1.jpg');
+    assert.deepEqual([...result.data], [1, 2, 3]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('downloadVariant hides variants outside the B2B project', async () => {
+  const service = new B2BProjectsService(
+    {
+      designVariant: { findFirst: async () => null },
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await assert.rejects(
+    service.downloadVariant('b2b-project-1', 'variant-other'),
+    (error) => error instanceof NotFoundException,
+  );
+});
+
+test('download endpoint forces an attachment response', async () => {
+  const headers = new Map();
+  let body;
+  const controller = new B2BProjectsController({
+    downloadVariant: async () => ({
+      data: Buffer.from([1, 2, 3]),
+      contentType: 'image/png',
+      fileName: 'roomvi-variant-1.png',
+    }),
+  });
+
+  await controller.downloadVariant('project-1', 'variant-1', {
+    setHeader: (name, value) => headers.set(name, value),
+    send: (value) => {
+      body = value;
+    },
+  });
+
+  assert.equal(headers.get('Content-Type'), 'image/png');
+  assert.equal(
+    headers.get('Content-Disposition'),
+    'attachment; filename="roomvi-variant-1.png"',
+  );
+  assert.deepEqual([...body], [1, 2, 3]);
 });

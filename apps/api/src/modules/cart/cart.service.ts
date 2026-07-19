@@ -126,9 +126,10 @@ export class CartService {
   ) {
     const owner = await this.resolveOwner(context);
 
-    const designVariant = await this.prisma.designVariant.findUnique({
+    const designVariant = await this.prisma.designVariant.findFirst({
       where: {
         id: designVariantId,
+        roomProject: { b2bProject: null },
       },
       include: {
         roomProject: true,

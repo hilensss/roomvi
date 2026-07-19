@@ -58,10 +58,23 @@ export type B2BProject = {
 };
 
 export type B2BProjectsListResponse = {
-  items: B2BProject[];
+  items: B2BProjectListItem[];
   total: number;
   limit: number;
   offset: number;
+};
+
+export type B2BProjectListItem = Omit<
+  B2BProject,
+  'products' | 'roomProject' | '_count'
+> & {
+  _count: { products: number };
+  roomProject: {
+    generationJobs: Pick<
+      B2BProjectGenerationJob,
+      'id' | 'status' | 'progress'
+    >[];
+  } | null;
 };
 
 export type B2BProjectCatalogResponse = {

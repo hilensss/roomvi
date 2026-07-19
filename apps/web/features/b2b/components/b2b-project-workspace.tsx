@@ -7,6 +7,7 @@ import { formatMoney } from '@/features/catalog/lib/catalog.helpers';
 import type { DesignVariant, Product } from '@/shared/api/types';
 import { cn } from '@/shared/lib/cn';
 import { SafeImage } from '@/shared/ui/safe-image';
+import { getB2BVariantDownloadUrl } from '../api/b2b-api';
 import {
   useB2BProjectCatalogQuery,
   useB2BProjectQuery,
@@ -144,7 +145,9 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
         </div>
       ) : null}
 
-      {variants.length > 0 ? <Results variants={variants} /> : null}
+      {variants.length > 0 ? (
+        <Results projectId={projectId} variants={variants} />
+      ) : null}
 
       {editable ? (
         <section className="mt-8">
@@ -221,7 +224,7 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
                 type="button"
                 onClick={startGeneration}
                 disabled={
-                  project.status !== 'READY_TO_GENERATE' ||
+                  !['READY_TO_GENERATE', 'FAILED'].includes(project.status) ||
                   selectionChanged ||
                   startMutation.isPending
                 }
@@ -229,7 +232,9 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
               >
                 {startMutation.isPending
                   ? 'Запускаем...'
-                  : 'Создать 2 визуализации'}
+                  : project.status === 'FAILED'
+                    ? 'Повторить 2 визуализации'
+                    : 'Создать 2 визуализации'}
               </button>
             </div>
           </div>
@@ -325,8 +330,10 @@ function GenerationProgress({
 }
 
 function Results({
+  projectId,
   variants,
 }: {
+  projectId: string;
   variants: DesignVariant[];
 }) {
   return (
@@ -363,7 +370,7 @@ function Results({
                   </p>
                 </div>
                 <a
-                  href={variant.imageUrl}
+                  href={getB2BVariantDownloadUrl(projectId, variant.id)}
                   download
                   target="_blank"
                   rel="noreferrer"
@@ -379,14 +386,16 @@ function Results({
                   Товары в визуализации
                 </p>
                 <ul className="space-y-2">
-                  {variant.products.map(({ id, product }) => (
+                  {variant.products.map(({ id, productSnapshot }) => (
                     <li
                       key={id}
                       className="flex items-center justify-between gap-4 text-sm"
                     >
-                      <span className="text-ink">{product.title}</span>
+                      <span className="text-ink">
+                        {productSnapshot.title}
+                      </span>
                       <span className="shrink-0 text-ink-soft">
-                        {formatMoney(product.price)}
+                        {formatMoney(productSnapshot.price)}
                       </span>
                     </li>
                   ))}

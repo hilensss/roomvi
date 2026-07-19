@@ -663,7 +663,7 @@ export class GenerationProcessingService {
         }
 
         try {
-          results[planIndex] = await this.generateVariantWithRetry(
+          const generated = await this.generateVariantWithRetry(
             generationJob.id,
             plan.variantNumber,
             () =>
@@ -689,6 +689,12 @@ export class GenerationProcessingService {
                 },
               }),
           );
+          if (generated.length !== 1) {
+            throw new BadRequestException(
+              'AI provider must return exactly one generated variant per prepared request',
+            );
+          }
+          results[planIndex] = generated;
 
           const previous = variantProgress.get(plan.variantNumber) ?? {
             progress: 0,

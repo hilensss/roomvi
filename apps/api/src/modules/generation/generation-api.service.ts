@@ -7,6 +7,7 @@ import {
   GenerationJobStatus,
   GenerationOwnerType,
   GenerationProvider,
+  GenerationScenario,
   Prisma,
   RoomProjectStatus,
 } from '@roomvi/database';
@@ -68,8 +69,8 @@ export class GenerationApiService {
     return { project: roomProject, job: generationJob };
   }
   async getGenerationJob(jobId: string, context: CreateGenerationContext) {
-    const job = await this.prisma.generationJob.findUnique({
-      where: { id: jobId },
+    const job = await this.prisma.generationJob.findFirst({
+      where: { id: jobId, scenario: GenerationScenario.MARKETPLACE },
       include: {
         roomProject: true,
         designVariants: {
@@ -89,8 +90,8 @@ export class GenerationApiService {
     throw new UnauthorizedException('No access to this generation job');
   }
   async getProject(projectId: string, context: CreateGenerationContext) {
-    const project = await this.prisma.roomProject.findUnique({
-      where: { id: projectId },
+    const project = await this.prisma.roomProject.findFirst({
+      where: { id: projectId, b2bProject: null },
       include: {
         designVariants: {
           include: { products: { include: { product: true } } },
@@ -113,7 +114,7 @@ export class GenerationApiService {
   async listMyProjects(context: CreateGenerationContext) {
     if (context.user)
       return this.prisma.roomProject.findMany({
-        where: { userId: context.user.userId },
+        where: { userId: context.user.userId, b2bProject: null },
         orderBy: { createdAt: 'desc' },
         include: { designVariants: { take: 1, orderBy: { createdAt: 'asc' } } },
       });
@@ -125,7 +126,7 @@ export class GenerationApiService {
       if (!guestSession)
         throw new UnauthorizedException('Invalid guest session');
       return this.prisma.roomProject.findMany({
-        where: { guestSessionId: guestSession.id },
+        where: { guestSessionId: guestSession.id, b2bProject: null },
         orderBy: { createdAt: 'desc' },
         include: { designVariants: { take: 1, orderBy: { createdAt: 'asc' } } },
       });

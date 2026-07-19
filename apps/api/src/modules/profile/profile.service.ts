@@ -21,7 +21,7 @@ export class ProfileService {
       }),
 
       this.prisma.roomProject.findMany({
-        where: { userId },
+        where: { userId, b2bProject: null },
         orderBy: { createdAt: 'desc' },
         include: {
           designVariants: {
