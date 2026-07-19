@@ -4,6 +4,7 @@ import { ProfileService } from '../dist/modules/profile/profile.service.js';
 
 test('profile summary selects only safe order scalars', async () => {
   let orderQuery;
+  let projectQuery;
   const safeOrder = {
     id: 'order-1',
     number: 1042,
@@ -22,7 +23,12 @@ test('profile summary selects only safe order scalars', async () => {
         email: 'user@example.com',
       }),
     },
-    roomProject: { findMany: async () => [] },
+    roomProject: {
+      findMany: async (query) => {
+        projectQuery = query;
+        return [];
+      },
+    },
     order: {
       findMany: async (query) => {
         orderQuery = query;
@@ -50,4 +56,8 @@ test('profile summary selects only safe order scalars', async () => {
     },
   });
   assert.deepEqual(result.orders, [safeOrder]);
+  assert.deepEqual(projectQuery.where, {
+    userId: 'user-1',
+    b2bProject: null,
+  });
 });

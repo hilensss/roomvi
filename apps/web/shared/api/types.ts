@@ -90,6 +90,12 @@ export type Product = {
   color: string | null;
   isActive: boolean;
   isAiEligible: boolean;
+  supplier?: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+  };
 };
 
 export type RoomProject = {
@@ -119,7 +125,13 @@ export type DesignVariantProduct = {
   role: string | null;
   x: number | null;
   y: number | null;
-  productSnapshot: unknown;
+  productSnapshot: {
+    id: string;
+    title: string;
+    price: number;
+    currency: string;
+    [key: string]: unknown;
+  };
   product: Product;
 };
 
@@ -198,7 +210,7 @@ export type CurrentCartResponse =
       currency: 'RUB';
     };
 
-export type UserRole = 'USER' | 'ADMIN';
+export type UserRole = 'USER' | 'MANAGER' | 'ADMIN';
 
 export type AuthUser = {
   id: string;

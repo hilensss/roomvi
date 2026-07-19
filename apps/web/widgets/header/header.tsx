@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { ShieldCheck, ShoppingCart, User } from 'lucide-react';
+import { BriefcaseBusiness, ShieldCheck, ShoppingCart, User } from 'lucide-react';
 import { useState } from 'react';
 import { useCurrentUserQuery } from '@/features/auth/api/auth-queries';
 import { AuthModal } from '@/features/auth/components/auth-modal';
@@ -49,6 +49,17 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          {user?.role === 'MANAGER' || user?.role === 'ADMIN' ? (
+            <Link
+              href="/manager/projects"
+              aria-label="B2B-проекты"
+              className="flex h-11 items-center gap-2 rounded-2xl border border-brand/40 px-3 text-sm font-medium text-brand transition hover:bg-brand hover:text-white"
+            >
+              <BriefcaseBusiness size={18} />
+              <span className="hidden lg:inline">B2B</span>
+            </Link>
+          ) : null}
+
           {user?.role === 'ADMIN' ? (
             <Link
               href="/admin/orders"

@@ -5,10 +5,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  B2BProjectStatus,
   GenerationJobStatus,
   GenerationOwnerType,
+  GenerationScenario,
   Product,
   RoomProjectStatus,
+  StockStatus,
 } from '@roomvi/database';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { AiProviderFactory } from './providers/ai-provider.factory.js';
@@ -64,7 +67,20 @@ export class GenerationProcessingService {
 
     const generationJob = await this.prisma.generationJob.findUnique({
       where: { id: generationJobId },
-      include: { roomProject: true },
+      include: {
+        roomProject: {
+          include: {
+            b2bProject: {
+              include: {
+                products: {
+                  orderBy: { sortOrder: 'asc' },
+                  include: { product: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!generationJob) throw new NotFoundException('Generation job not found');
@@ -89,7 +105,10 @@ export class GenerationProcessingService {
         startedAt: new Date(),
         errorMessage: null,
         progress: 1,
-        currentStep: 'Подбираем товары из каталога',
+        currentStep:
+          generationJob.scenario === GenerationScenario.B2B_FURNITURE_LINE
+            ? 'Проверяем выбранные товары'
+            : 'Подбираем товары из каталога',
       },
     });
 
@@ -105,8 +124,28 @@ export class GenerationProcessingService {
     const project = generationJob.roomProject;
 
     try {
-      const variantsCount =
-        generationJob.ownerType === GenerationOwnerType.GUEST ? 2 : 4;
+      const isFurnitureProject =
+        generationJob.scenario === GenerationScenario.B2B_FURNITURE_LINE;
+      const variantsCount = isFurnitureProject
+        ? 2
+        : (generationJob.requestedVariants ??
+          (generationJob.ownerType === GenerationOwnerType.GUEST ? 2 : 4));
+      if (variantsCount < 1 || variantsCount > 8) {
+        throw new BadRequestException(
+          'Generation variants count must be between 1 and 8',
+        );
+      }
+      if (isFurnitureProject && generationJob.requestedVariants !== 2) {
+        throw new BadRequestException(
+          'Furniture projects require exactly two variants',
+        );
+      }
+      const fixedProducts = isFurnitureProject
+        ? this.getFurnitureProducts(
+            project.b2bProject,
+            project.sourceImageUrl,
+          )
+        : null;
       const variantProgress = new Map<number, VariantProgressState>();
 
       for (
@@ -130,7 +169,9 @@ export class GenerationProcessingService {
 
       await this.updateProgress(generationJob.id, {
         progress: 8,
-        currentStep: 'Подбираем товары из каталога',
+        currentStep: isFurnitureProject
+          ? 'Проверяем выбранные товары'
+          : 'Подбираем товары из каталога',
       });
 
       const preparedVariants: PreparedVariant[] = [];
@@ -150,18 +191,26 @@ export class GenerationProcessingService {
           );
         }
 
-        const productSet =
-          await this.productMatchingService.buildProductSetForVariant({
-            roomType: project.roomType,
-            style: project.style,
-            budgetMin: project.budgetMin ?? undefined,
-            budgetMax: project.budgetMax ?? undefined,
-            widthCm: project.widthCm ?? undefined,
-            depthCm: project.depthCm ?? undefined,
-            variantNumber,
-            excludeProductIds:
-              variantNumber <= 3 ? Array.from(usedProductIds) : [],
-          });
+        const productSet = fixedProducts
+          ? {
+              products: fixedProducts,
+              totalPrice: fixedProducts.reduce(
+                (total, product) => total + product.price,
+                0,
+              ),
+              missingRequiredCategories: [],
+            }
+          : await this.productMatchingService.buildProductSetForVariant({
+              roomType: project.roomType,
+              style: project.style,
+              budgetMin: project.budgetMin ?? undefined,
+              budgetMax: project.budgetMax ?? undefined,
+              widthCm: project.widthCm ?? undefined,
+              depthCm: project.depthCm ?? undefined,
+              variantNumber,
+              excludeProductIds:
+                variantNumber <= 3 ? Array.from(usedProductIds) : [],
+            });
 
         const products = productSet.products;
 
@@ -301,11 +350,13 @@ export class GenerationProcessingService {
 
       for (const generatedVariant of generatedVariants) {
         const variantNumber = createdVariants.length + 1;
-        const variantProducts = generatedVariant.productIds.length
-          ? (generatedVariant.productIds
-              .map((id) => productById.get(id))
-              .filter(Boolean) as Product[])
-          : [];
+        const variantProducts =
+          fixedProducts ??
+          (generatedVariant.productIds.length
+            ? (generatedVariant.productIds
+                .map((id) => productById.get(id))
+                .filter(Boolean) as Product[])
+            : []);
 
         const totalPrice = variantProducts.reduce((sum, p) => sum + p.price, 0);
 
@@ -357,6 +408,13 @@ export class GenerationProcessingService {
         data: { status: RoomProjectStatus.GENERATED },
       });
 
+      if (project.b2bProject) {
+        await this.prisma.b2BProject.update({
+          where: { id: project.b2bProject.id },
+          data: { status: B2BProjectStatus.COMPLETED },
+        });
+      }
+
       this.logger.log(
         `Generation job ${generationJob.id}: completed variants=${createdVariants.length}`,
       );
@@ -389,8 +447,45 @@ export class GenerationProcessingService {
         data: { status: RoomProjectStatus.DRAFT },
       });
 
+      if (project.b2bProject) {
+        await this.prisma.b2BProject.update({
+          where: { id: project.b2bProject.id },
+          data: { status: B2BProjectStatus.FAILED },
+        });
+      }
+
       throw error;
     }
+  }
+
+  private getFurnitureProducts(
+    b2bProject:
+      | {
+          products: Array<{ product: Product }>;
+        }
+      | null,
+    sourceImageUrl: string | null,
+  ): Product[] {
+    const products = b2bProject?.products.map(({ product }) => product) ?? [];
+    const maximumProducts = sourceImageUrl ? 9 : 10;
+
+    if (
+      products.length < 1 ||
+      products.length > maximumProducts ||
+      products.some(
+        (product) =>
+          !product.isActive ||
+          !product.isAiEligible ||
+          product.stockStatus !== StockStatus.IN_STOCK ||
+          product.imageUrls.length === 0,
+      )
+    ) {
+      throw new BadRequestException(
+        `Furniture generation requires 1–${maximumProducts} active, AI-eligible, in-stock products with images`,
+      );
+    }
+
+    return products;
   }
 
   private normalizeProviderStatus(
@@ -573,7 +668,7 @@ export class GenerationProcessingService {
         }
 
         try {
-          results[planIndex] = await this.generateVariantWithRetry(
+          const generated = await this.generateVariantWithRetry(
             generationJob.id,
             plan.variantNumber,
             () =>
@@ -599,6 +694,12 @@ export class GenerationProcessingService {
                 },
               }),
           );
+          if (generated.length !== 1) {
+            throw new BadRequestException(
+              'AI provider must return exactly one generated variant per prepared request',
+            );
+          }
+          results[planIndex] = generated;
 
           const previous = variantProgress.get(plan.variantNumber) ?? {
             progress: 0,

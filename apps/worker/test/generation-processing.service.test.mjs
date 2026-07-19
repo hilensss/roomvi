@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  B2BProjectStatus,
   GenerationJobStatus,
   GenerationOwnerType,
   GenerationProvider,
+  GenerationScenario,
   InteriorStyle,
   ProductCategory,
   RoomProjectStatus,
@@ -62,10 +64,11 @@ function createHarness(generateDesigns, options = {}) {
     widthCm: 400,
     heightCm: 270,
     depthCm: 350,
-    sourceImageUrl: null,
+    sourceImageUrl: options.sourceImageUrl ?? null,
     status: RoomProjectStatus.READY_TO_GENERATE,
     createdAt: new Date('2026-01-01T00:00:00.000Z'),
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    b2bProject: options.b2bProject ?? null,
   };
   const generationJob = {
     id: 'job-1',
@@ -75,10 +78,14 @@ function createHarness(generateDesigns, options = {}) {
     guestSessionId: null,
     provider: GenerationProvider.MOCK,
     status: GenerationJobStatus.PENDING,
+    scenario: options.scenario ?? GenerationScenario.MARKETPLACE,
+    requestedVariants: options.requestedVariants ?? null,
     roomProject: project,
   };
   const jobUpdates = [];
   const createdVariants = [];
+  const matchingCalls = [];
+  const b2bProjectUpdates = [];
   const prisma = {
     generationJob: {
       findUnique: async () => generationJob,
@@ -90,6 +97,12 @@ function createHarness(generateDesigns, options = {}) {
     },
     roomProject: {
       update: async ({ data }) => ({ ...project, ...data }),
+    },
+    b2BProject: {
+      update: async ({ data }) => {
+        b2bProjectUpdates.push(data);
+        return { ...options.b2bProject, ...data };
+      },
     },
     designVariant: {
       create: async ({ data }) => {
@@ -116,7 +129,9 @@ function createHarness(generateDesigns, options = {}) {
     getProvider: () => ({ providerName: 'MOCK', generateDesigns }),
   };
   const productMatchingService = {
-    buildProductSetForVariant: async ({ variantNumber }) => {
+    buildProductSetForVariant: async (input) => {
+      matchingCalls.push(input);
+      const { variantNumber } = input;
       const product = createProduct(variantNumber);
       return {
         products: [product],
@@ -132,7 +147,13 @@ function createHarness(generateDesigns, options = {}) {
     productMatchingService,
   );
 
-  return { service, jobUpdates, createdVariants };
+  return {
+    service,
+    jobUpdates,
+    createdVariants,
+    matchingCalls,
+    b2bProjectUpdates,
+  };
 }
 
 function getVariantNumber(input) {
@@ -146,6 +167,96 @@ function createGeneratedVariant(input, variantNumber) {
     productIds: input.products.map((product) => product.id),
   };
 }
+
+test('furniture jobs generate exactly two variants from up to ten unchanged manual products without a room photo', async () => {
+  const fixedProducts = Array.from({ length: 10 }, (_, index) =>
+    createProduct(index + 11),
+  );
+  const providerInputs = [];
+  const b2bProject = {
+    id: 'b2b-project-1',
+    status: B2BProjectStatus.GENERATING,
+    products: fixedProducts.map((product, sortOrder) => ({
+      productId: product.id,
+      sortOrder,
+      product,
+    })),
+  };
+  const {
+    service,
+    createdVariants,
+    matchingCalls,
+    b2bProjectUpdates,
+  } = createHarness(
+    async (input) => {
+      providerInputs.push(input);
+      return [
+        {
+          ...createGeneratedVariant(input, getVariantNumber(input)),
+          productIds: [input.products[0].id],
+        },
+      ];
+    },
+    {
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedVariants: 2,
+      b2bProject,
+    },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  assert.equal(matchingCalls.length, 0);
+  assert.equal(providerInputs.length, 2);
+  assert.deepEqual(
+    providerInputs.map((input) => input.products.map(({ id }) => id)),
+    [fixedProducts.map(({ id }) => id), fixedProducts.map(({ id }) => id)],
+  );
+  assert.equal(createdVariants.length, 2);
+  assert.deepEqual(
+    createdVariants.map((variant) =>
+      variant.products.create.map(({ productId }) => productId),
+    ),
+    [fixedProducts.map(({ id }) => id), fixedProducts.map(({ id }) => id)],
+  );
+  assert.equal(
+    b2bProjectUpdates.at(-1).status,
+    B2BProjectStatus.COMPLETED,
+  );
+});
+
+test('furniture jobs reject ten products when an empty-room photo is supplied', async () => {
+  const fixedProducts = Array.from({ length: 10 }, (_, index) =>
+    createProduct(index + 1),
+  );
+  const b2bProject = {
+    id: 'b2b-project-1',
+    status: B2BProjectStatus.GENERATING,
+    products: fixedProducts.map((product, sortOrder) => ({
+      productId: product.id,
+      sortOrder,
+      product,
+    })),
+  };
+  const { service, b2bProjectUpdates } = createHarness(
+    async () => assert.fail('provider must not receive an oversized set'),
+    {
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedVariants: 2,
+      sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
+      b2bProject,
+    },
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /1–9 active, AI-eligible/,
+  );
+  assert.equal(
+    b2bProjectUpdates.at(-1).status,
+    B2BProjectStatus.FAILED,
+  );
+});
 
 test('runs two variants concurrently and preserves variant order', async () => {
   let activeCalls = 0;
@@ -402,9 +513,49 @@ test('fails the job when the provider produces no variants', async () => {
 
   await assert.rejects(
     service.processGenerationJob('job-1'),
-    /No generated variants were produced/,
+    /exactly one generated variant/,
   );
 
+  assert.equal(
+    jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
+    true,
+  );
+});
+
+test('fails the whole job when one planned variant returns no output', async () => {
+  const { service, createdVariants, jobUpdates } = createHarness(
+    async (input) =>
+      getVariantNumber(input) === 1
+        ? []
+        : [createGeneratedVariant(input, getVariantNumber(input))],
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /exactly one generated variant/,
+  );
+
+  assert.equal(createdVariants.length, 0);
+  assert.equal(
+    jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
+    true,
+  );
+});
+
+test('fails the whole job when a planned provider call returns extra output', async () => {
+  const { service, createdVariants, jobUpdates } = createHarness(
+    async (input) => [
+      createGeneratedVariant(input, getVariantNumber(input)),
+      createGeneratedVariant(input, getVariantNumber(input)),
+    ],
+  );
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /exactly one generated variant/,
+  );
+
+  assert.equal(createdVariants.length, 0);
   assert.equal(
     jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
     true,

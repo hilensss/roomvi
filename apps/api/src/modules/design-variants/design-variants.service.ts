@@ -24,8 +24,8 @@ export class DesignVariantsService {
     id: string,
     context: AccessContext,
   ): Promise<unknown> {
-    const designVariant = await this.prisma.designVariant.findUnique({
-      where: { id },
+    const designVariant = await this.prisma.designVariant.findFirst({
+      where: { id, roomProject: { b2bProject: null } },
       include: { roomProject: true },
     });
 
@@ -74,8 +74,8 @@ export class DesignVariantsService {
   }
 
   async getDesignVariantById(id: string, context: AccessContext) {
-    const designVariant = await this.prisma.designVariant.findUnique({
-      where: { id },
+    const designVariant = await this.prisma.designVariant.findFirst({
+      where: { id, roomProject: { b2bProject: null } },
       include: {
         roomProject: true,
         products: {
