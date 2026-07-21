@@ -23,14 +23,20 @@ const statusLabels = {
   FAILED: 'Ошибка',
 } as const;
 
+const CATALOG_PAGE_SIZE = 24;
+
 export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
   const projectQuery = useB2BProjectQuery(projectId);
   const [search, setSearch] = useState('');
+  const [catalogPage, setCatalogPage] = useState(0);
   const catalogParams = useMemo(() => {
-    const params = new URLSearchParams({ limit: '40', offset: '0' });
+    const params = new URLSearchParams({
+      limit: String(CATALOG_PAGE_SIZE),
+      offset: String(catalogPage * CATALOG_PAGE_SIZE),
+    });
     if (search.trim()) params.set('search', search.trim());
     return params;
-  }, [search]);
+  }, [catalogPage, search]);
   const catalogQuery = useB2BProjectCatalogQuery(projectId, catalogParams);
   const replaceMutation = useReplaceB2BProjectProductsMutation();
   const startMutation = useStartB2BProjectGenerationMutation();
@@ -167,7 +173,10 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
               <Search className="absolute left-4 top-1/2 size-4 -translate-y-1/2 text-ink-soft" />
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setCatalogPage(0);
+                }}
                 className="h-12 w-full rounded-pill border border-line/60 bg-white pl-11 pr-4 outline-none transition focus:border-brand"
                 placeholder="Поиск по каталогу"
               />
@@ -196,6 +205,43 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
               ))}
             </div>
           )}
+
+          {catalogQuery.data &&
+          catalogQuery.data.total > catalogQuery.data.limit ? (
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <button
+                type="button"
+                onClick={() =>
+                  setCatalogPage((current) => Math.max(0, current - 1))
+                }
+                disabled={catalogQuery.data.offset === 0}
+                className="rounded-pill border border-line/60 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand disabled:pointer-events-none disabled:opacity-40"
+              >
+                Назад
+              </button>
+              <span className="text-sm text-ink-soft">
+                Страница{' '}
+                {Math.floor(
+                  catalogQuery.data.offset / catalogQuery.data.limit,
+                ) + 1}{' '}
+                из{' '}
+                {Math.ceil(
+                  catalogQuery.data.total / catalogQuery.data.limit,
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCatalogPage((current) => current + 1)}
+                disabled={
+                  catalogQuery.data.offset + catalogQuery.data.limit >=
+                  catalogQuery.data.total
+                }
+                className="rounded-pill border border-line/60 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand disabled:pointer-events-none disabled:opacity-40"
+              >
+                Далее
+              </button>
+            </div>
+          ) : null}
 
           {actionError ? (
             <p role="alert" className="mt-5 text-sm text-brand">
@@ -347,65 +393,67 @@ function Results({
         </h2>
       </div>
       <div className="grid gap-6 xl:grid-cols-2">
-        {variants.map((variant, index) => (
-          <article
-            key={variant.id}
-            className="overflow-hidden rounded-card border border-line/50 bg-white"
-          >
-            <div className="relative aspect-[16/10] bg-line/15">
-              <SafeImage
-                src={variant.imageUrl}
-                alt={variant.title || `Вариант ${index + 1}`}
-                fill
-                className="object-cover"
-                sizes="(min-width: 1280px) 50vw, 100vw"
-              />
-            </div>
-            <div className="p-5 md:p-6">
-              <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-                <div>
-                  <h3 className="text-xl font-semibold text-ink">
-                    {variant.title || `Вариант ${index + 1}`}
-                  </h3>
-                  <p className="mt-1 text-sm text-ink-soft">
-                    Подборка: {formatMoney(variant.totalPrice)}
-                  </p>
+        {variants.map((variant, index) => {
+          const label = `Вариант ${index + 1}`;
+
+          return (
+            <article
+              key={variant.id}
+              className="overflow-hidden rounded-card border border-line/50 bg-white"
+            >
+              <div className="relative aspect-[16/10] bg-line/15">
+                <SafeImage
+                  src={variant.imageUrl}
+                  alt={label}
+                  fill
+                  className="object-cover"
+                  sizes="(min-width: 1280px) 50vw, 100vw"
+                />
+              </div>
+              <div className="p-5 md:p-6">
+                <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 className="text-xl font-semibold text-ink">{label}</h3>
+                    <p className="mt-1 text-sm text-ink-soft">
+                      Подборка: {formatMoney(variant.totalPrice)}
+                    </p>
+                  </div>
+                  <a
+                    href={getB2BVariantDownloadUrl(projectId, variant.id)}
+                    download
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label="Скачать визуализацию"
+                    className="inline-flex items-center justify-center gap-2 rounded-pill border border-line/60 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand"
+                  >
+                    <Download size={16} />
+                    Скачать
+                  </a>
                 </div>
-                <a
-                  href={getB2BVariantDownloadUrl(projectId, variant.id)}
-                  download
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-label="Скачать визуализацию"
-                  className="inline-flex items-center justify-center gap-2 rounded-pill border border-line/60 px-5 py-2.5 text-sm font-medium text-ink transition hover:border-brand hover:text-brand"
-                >
-                  <Download size={16} />
-                  Скачать
-                </a>
+                <div className="mt-5 border-t border-line/40 pt-4">
+                  <p className="mb-3 text-xs uppercase tracking-wider text-ink-soft">
+                    Товары в визуализации
+                  </p>
+                  <ul className="space-y-2">
+                    {variant.products.map(({ id, productSnapshot }) => (
+                      <li
+                        key={id}
+                        className="flex items-center justify-between gap-4 text-sm"
+                      >
+                        <span className="text-ink">
+                          {productSnapshot.title}
+                        </span>
+                        <span className="shrink-0 text-ink-soft">
+                          {formatMoney(productSnapshot.price)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-              <div className="mt-5 border-t border-line/40 pt-4">
-                <p className="mb-3 text-xs uppercase tracking-wider text-ink-soft">
-                  Товары в визуализации
-                </p>
-                <ul className="space-y-2">
-                  {variant.products.map(({ id, productSnapshot }) => (
-                    <li
-                      key={id}
-                      className="flex items-center justify-between gap-4 text-sm"
-                    >
-                      <span className="text-ink">
-                        {productSnapshot.title}
-                      </span>
-                      <span className="shrink-0 text-ink-soft">
-                        {formatMoney(productSnapshot.price)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </article>
-        ))}
+            </article>
+          );
+        })}
       </div>
     </section>
   );

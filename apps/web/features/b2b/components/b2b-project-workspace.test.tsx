@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
     createdAt: '2026-07-19T00:00:00.000Z',
     updatedAt: '2026-07-19T00:00:00.000Z',
   } as unknown as B2BProject,
+  catalogParams: vi.fn(),
   replace: vi.fn(),
   start: vi.fn(),
 }));
@@ -41,7 +42,7 @@ function product(index: number): Product {
     oldPrice: null,
     currency: 'RUB',
     stockStatus: 'IN_STOCK',
-    imageUrls: [`https://example.com/product-${index}.jpg`],
+    imageUrls: [`https://placehold.co/800x600?text=product-${index}`],
     productUrl: null,
     widthCm: null,
     heightCm: null,
@@ -59,16 +60,20 @@ vi.mock('../api/b2b-queries', () => ({
     isLoading: false,
     isError: false,
   }),
-  useB2BProjectCatalogQuery: () => ({
-    data: {
-      items: Array.from({ length: 11 }, (_, index) => product(index + 1)),
-      total: 11,
-      limit: 40,
-      offset: 0,
-    },
-    isLoading: false,
-    isError: false,
-  }),
+  useB2BProjectCatalogQuery: (_projectId: string, params: URLSearchParams) => {
+    mocks.catalogParams(params.toString());
+
+    return {
+      data: {
+        items: Array.from({ length: 11 }, (_, index) => product(index + 1)),
+        total: 50,
+        limit: Number(params.get('limit')),
+        offset: Number(params.get('offset')),
+      },
+      isLoading: false,
+      isError: false,
+    };
+  },
   useReplaceB2BProjectProductsMutation: () => ({
     mutateAsync: mocks.replace,
     isPending: false,
@@ -145,6 +150,40 @@ it('limits manual selection to nine products with a room photo', async () => {
   ).toBeDisabled();
 });
 
+it('paginates the catalog, preserves selection and resets to page one on search', async () => {
+  const user = userEvent.setup();
+  renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
+
+  expect(mocks.catalogParams).toHaveBeenLastCalledWith('limit=24&offset=0');
+  expect(screen.getByText('Страница 1 из 3')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Назад' })).toBeDisabled();
+
+  await user.click(screen.getByRole('button', { name: 'Выбрать Товар 1' }));
+  await user.click(screen.getByRole('button', { name: 'Далее' }));
+
+  expect(mocks.catalogParams).toHaveBeenLastCalledWith('limit=24&offset=24');
+  expect(screen.getByText('Страница 2 из 3')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Убрать Товар 1' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Назад' })).toBeEnabled();
+
+  await user.click(screen.getByRole('button', { name: 'Далее' }));
+
+  expect(mocks.catalogParams).toHaveBeenLastCalledWith('limit=24&offset=48');
+  expect(screen.getByText('Страница 3 из 3')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Далее' })).toBeDisabled();
+
+  await user.type(
+    screen.getByRole('textbox', { name: 'Поиск товаров' }),
+    'диван',
+  );
+
+  expect(mocks.catalogParams).toHaveBeenLastCalledWith(
+    'limit=24&offset=0&search=%D0%B4%D0%B8%D0%B2%D0%B0%D0%BD',
+  );
+  expect(screen.getByText('Страница 1 из 3')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Назад' })).toBeDisabled();
+});
+
 it('renders generated designs with their product selection and download links', () => {
   mocks.project.status = 'COMPLETED';
   mocks.project.roomProject = {
@@ -160,9 +199,9 @@ it('renders generated designs with their product selection and download links', 
             id: 'variant-1',
             roomProjectId: 'room-1',
             generationJobId: 'job-1',
-            title: 'Вариант 1',
+            title: 'AI-вариант',
             description: null,
-            imageUrl: 'https://example.com/design.jpg',
+            imageUrl: 'https://placehold.co/1200x750?text=design',
             totalPrice: 10001,
             currency: 'RUB',
             isSelected: false,
@@ -193,7 +232,11 @@ it('renders generated designs with their product selection and download links', 
 
   renderWithQueryClient(<B2BProjectWorkspace projectId="project-1" />);
 
-  expect(screen.getByText('Вариант 1')).toBeInTheDocument();
+  expect(
+    screen.getByRole('heading', { name: 'Вариант 1' }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: 'Вариант 1' })).toBeInTheDocument();
+  expect(screen.queryByText('AI-вариант')).not.toBeInTheDocument();
   expect(screen.getByText('Снимок товара 1')).toBeInTheDocument();
   expect(screen.getByText('7 777 ₽')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Скачать визуализацию' })).toHaveAttribute(
