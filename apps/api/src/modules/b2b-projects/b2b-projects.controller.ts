@@ -19,6 +19,7 @@ import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.j
 import { CreateB2BProjectDto } from './dto/create-b2b-project.dto.js';
 import { ListB2BProjectsQueryDto } from './dto/list-b2b-projects-query.dto.js';
 import { ReplaceB2BProjectProductsDto } from './dto/replace-b2b-project-products.dto.js';
+import { ReplaceB2BRoomsDto } from './dto/replace-b2b-rooms.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
 import { ManagerGuard } from './guards/manager.guard.js';
 
@@ -41,6 +42,29 @@ export class B2BProjectsController {
   create(@Body() dto: CreateB2BProjectDto, @Req() request: Request) {
     const user = request.user as JwtUser;
     return this.b2bProjectsService.create(dto, user.userId);
+  }
+
+  @Post(':id/analyze-floor-plan')
+  analyzeFloorPlan(@Param('id') id: string) {
+    return this.b2bProjectsService.startFloorPlanAnalysis(id);
+  }
+
+  @Get(':id/analysis')
+  getLatestAnalysis(@Param('id') id: string) {
+    return this.b2bProjectsService.getLatestAnalysis(id);
+  }
+
+  @Put(':id/rooms')
+  replaceRooms(
+    @Param('id') id: string,
+    @Body() dto: ReplaceB2BRoomsDto,
+  ) {
+    return this.b2bProjectsService.replaceRooms(id, dto);
+  }
+
+  @Post(':id/rooms/confirm')
+  confirmRooms(@Param('id') id: string) {
+    return this.b2bProjectsService.confirmRooms(id);
   }
 
   @Get(':id')

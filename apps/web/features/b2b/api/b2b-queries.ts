@@ -3,11 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createB2BProject,
+  confirmB2BRooms,
   getB2BProject,
   getB2BProjectCatalog,
   listB2BProjects,
   listB2BSuppliers,
   replaceB2BProjectProducts,
+  replaceB2BRooms,
+  startB2BFloorPlanAnalysis,
   startB2BProjectGeneration,
 } from './b2b-api';
 
@@ -44,19 +47,59 @@ export function useB2BProjectQuery(projectId: string) {
     queryKey: b2bQueryKeys.detail(projectId),
     queryFn: () => getB2BProject(projectId),
     refetchInterval: (query) =>
-      query.state.data?.status === 'GENERATING' ? 2_000 : false,
+      ['ANALYZING', 'GENERATING'].includes(
+        query.state.data?.status ?? '',
+      )
+        ? 2_000
+        : false,
   });
 }
 
 export function useB2BProjectCatalogQuery(
   projectId: string,
   params: URLSearchParams,
+  enabled = true,
 ) {
   const serialized = params.toString();
   return useQuery({
     queryKey: b2bQueryKeys.catalog(projectId, serialized),
     queryFn: () =>
       getB2BProjectCatalog(projectId, new URLSearchParams(serialized)),
+    enabled,
+  });
+}
+
+export function useStartB2BFloorPlanAnalysisMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: startB2BFloorPlanAnalysis,
+    onSuccess: async (_run, projectId) => {
+      await queryClient.invalidateQueries({
+        queryKey: b2bQueryKeys.detail(projectId),
+      });
+    },
+  });
+}
+
+export function useReplaceB2BRoomsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: replaceB2BRooms,
+    onSuccess: async (project) => {
+      queryClient.setQueryData(b2bQueryKeys.detail(project.id), project);
+      await queryClient.invalidateQueries({ queryKey: b2bQueryKeys.lists() });
+    },
+  });
+}
+
+export function useConfirmB2BRoomsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: confirmB2BRooms,
+    onSuccess: async (project) => {
+      queryClient.setQueryData(b2bQueryKeys.detail(project.id), project);
+      await queryClient.invalidateQueries({ queryKey: b2bQueryKeys.lists() });
+    },
   });
 }
 

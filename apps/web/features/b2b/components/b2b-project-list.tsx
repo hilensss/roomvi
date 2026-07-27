@@ -7,8 +7,11 @@ import { useB2BProjectsQuery } from '../api/b2b-queries';
 
 const statusLabels = {
   DRAFT: 'Черновик',
+  ANALYZING: 'Распознавание',
+  REVIEW_REQUIRED: 'Нужна проверка',
   READY_TO_GENERATE: 'Готов к генерации',
   GENERATING: 'Генерация',
+  PARTIALLY_COMPLETED: 'Готово частично',
   COMPLETED: 'Готово',
   FAILED: 'Ошибка',
 } as const;
@@ -27,7 +30,7 @@ export function B2BProjectList() {
           <p className="rv-eyebrow mb-2">B2B workspace</p>
           <h1 className="text-section-title text-ink">Проекты визуализации</h1>
           <p className="mt-2 text-ink-soft">
-            Сейчас доступен сценарий для мебельных линеек.
+            Мебельные линейки и проекты квартир для застройщиков.
           </p>
         </div>
         <Link
@@ -68,15 +71,27 @@ export function B2BProjectList() {
               </div>
               <dl className="mt-6 grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <dt className="text-ink-soft">Поставщик</dt>
+                  <dt className="text-ink-soft">
+                    {project.type === 'FURNITURE_LINE'
+                      ? 'Поставщик'
+                      : 'Сценарий'}
+                  </dt>
                   <dd className="mt-1 font-medium text-ink">
-                    {project.supplier.name}
+                    {project.type === 'FURNITURE_LINE'
+                      ? project.supplier?.name
+                      : 'Планировка квартиры'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-ink-soft">Товаров</dt>
+                  <dt className="text-ink-soft">
+                    {project.type === 'FURNITURE_LINE'
+                      ? 'Товаров'
+                      : 'Стиль'}
+                  </dt>
                   <dd className="mt-1 font-medium text-ink">
-                    {project._count.products}
+                    {project.type === 'FURNITURE_LINE'
+                      ? project._count.products
+                      : project.style}
                   </dd>
                 </div>
               </dl>

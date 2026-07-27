@@ -5,7 +5,9 @@ import type {
   B2BProjectsListResponse,
   B2BSupplier,
   CreateB2BProjectInput,
+  ReplaceB2BRoomsInput,
   StartB2BGenerationResponse,
+  B2BAnalysisRun,
 } from '../model/b2b.types';
 import type { UploadedFile } from '@/shared/api/types';
 
@@ -70,6 +72,33 @@ export function replaceB2BProjectProducts(
 export function startB2BProjectGeneration(projectId: string) {
   return apiFetch<StartB2BGenerationResponse>(
     `/manager/b2b-projects/${projectId}/generate`,
+    { method: 'POST' },
+  );
+}
+
+export function startB2BFloorPlanAnalysis(projectId: string) {
+  return apiFetch<B2BAnalysisRun>(
+    `/manager/b2b-projects/${projectId}/analyze-floor-plan`,
+    { method: 'POST' },
+  );
+}
+
+export function replaceB2BRooms(input: ReplaceB2BRoomsInput) {
+  return apiFetch<B2BProject>(
+    `/manager/b2b-projects/${input.projectId}/rooms`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        roomsRevision: input.roomsRevision,
+        rooms: input.rooms,
+      }),
+    },
+  );
+}
+
+export function confirmB2BRooms(projectId: string) {
+  return apiFetch<B2BProject>(
+    `/manager/b2b-projects/${projectId}/rooms/confirm`,
     { method: 'POST' },
   );
 }

@@ -6,8 +6,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  B2BAnalysisStatus,
   B2BProjectStatus,
   B2BProjectType,
+  B2BRoomStatus,
   GenerationJobStatus,
   GenerationOwnerType,
   GenerationProvider,
@@ -23,6 +25,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.js';
 import { CreateB2BProjectDto } from './dto/create-b2b-project.dto.js';
 import { ListB2BProjectsQueryDto } from './dto/list-b2b-projects-query.dto.js';
+import {
+  B2BRoomDraftDto,
+  ReplaceB2BRoomsDto,
+} from './dto/replace-b2b-rooms.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
 
 const mutableProjectStatuses = [
@@ -52,6 +58,18 @@ const projectDetailInclude = {
         },
       },
     },
+  },
+  rooms: {
+    orderBy: { sortOrder: 'asc' as const },
+    include: {
+      openings: {
+        orderBy: { createdAt: 'asc' as const },
+      },
+    },
+  },
+  analysisRuns: {
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
   },
 } satisfies Prisma.B2BProjectInclude;
 
@@ -114,18 +132,35 @@ export class B2BProjectsService {
   }
 
   async create(dto: CreateB2BProjectDto, createdById: string) {
-    await this.requireActiveSupplier(dto.supplierId);
+    const type = dto.type ?? B2BProjectType.FURNITURE_LINE;
+    if (type === B2BProjectType.FURNITURE_LINE) {
+      if (!dto.supplierId || !dto.roomType) {
+        throw new BadRequestException(
+          'Furniture project requires a supplier and room type',
+        );
+      }
+      await this.requireActiveSupplier(dto.supplierId);
+    } else if (!dto.sourceImageUrl) {
+      throw new BadRequestException(
+        'Developer project requires a floor-plan image',
+      );
+    }
 
     return this.prisma.b2BProject.create({
       data: {
-        type: B2BProjectType.FURNITURE_LINE,
+        type,
         name: dto.name.trim(),
         partnerName: dto.partnerName.trim(),
-        supplierId: dto.supplierId,
-        roomType: dto.roomType,
+        supplierId:
+          type === B2BProjectType.FURNITURE_LINE
+            ? dto.supplierId
+            : null,
+        roomType:
+          type === B2BProjectType.FURNITURE_LINE ? dto.roomType : null,
         style: dto.style,
         managerComment: dto.managerComment?.trim() || null,
         sourceImageUrl: dto.sourceImageUrl ?? null,
+        defaultCeilingHeightCm: dto.defaultCeilingHeightCm ?? 270,
         createdById,
       },
       include: projectDetailInclude,
@@ -139,6 +174,216 @@ export class B2BProjectsService {
     });
     if (!project) throw new NotFoundException('B2B project not found');
     return project;
+  }
+
+  async getLatestAnalysis(id: string) {
+    const project = await this.requireDeveloperProject(id);
+    return this.prisma.floorPlanAnalysisRun.findFirst({
+      where: { b2bProjectId: project.id },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async startFloorPlanAnalysis(id: string) {
+    const project = await this.requireDeveloperProject(id);
+    if (!project.sourceImageUrl) {
+      throw new BadRequestException('Floor-plan image is required');
+    }
+    if (project.status === B2BProjectStatus.ANALYZING) {
+      const activeRun = await this.prisma.floorPlanAnalysisRun.findFirst({
+        where: {
+          b2bProjectId: id,
+          status: {
+            in: [
+              B2BAnalysisStatus.PENDING,
+              B2BAnalysisStatus.PROCESSING,
+            ],
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (activeRun) return activeRun;
+    }
+
+    const run = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2BProject.updateMany({
+        where: {
+          id,
+          type: B2BProjectType.DEVELOPER_FLOOR_PLAN,
+          status: {
+            in: [
+              B2BProjectStatus.DRAFT,
+              B2BProjectStatus.FAILED,
+              B2BProjectStatus.REVIEW_REQUIRED,
+            ],
+          },
+        },
+        data: { status: B2BProjectStatus.ANALYZING },
+      });
+      if (claimed.count !== 1) {
+        await this.throwProjectMutationConflict(tx, id);
+      }
+      return tx.floorPlanAnalysisRun.create({
+        data: {
+          b2bProjectId: id,
+          status: B2BAnalysisStatus.PENDING,
+          progress: 0,
+          currentStep: 'Ожидает анализа',
+        },
+      });
+    });
+
+    try {
+      await this.generationQueueService.enqueueFloorPlanAnalysis(run.id);
+    } catch {
+      await this.prisma.$transaction([
+        this.prisma.floorPlanAnalysisRun.update({
+          where: { id: run.id },
+          data: {
+            status: B2BAnalysisStatus.FAILED,
+            progress: 100,
+            currentStep: 'Не удалось поставить анализ в очередь',
+            errorMessage: 'Failed to enqueue floor-plan analysis',
+            completedAt: new Date(),
+          },
+        }),
+        this.prisma.b2BProject.update({
+          where: { id },
+          data: { status: B2BProjectStatus.FAILED },
+        }),
+      ]);
+      throw new BadGatewayException(
+        'Failed to enqueue floor-plan analysis',
+      );
+    }
+    return run;
+  }
+
+  async replaceRooms(id: string, dto: ReplaceB2BRoomsDto) {
+    for (const room of dto.rooms) this.validateRoomDraft(room);
+
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2BProject.updateMany({
+        where: {
+          id,
+          type: B2BProjectType.DEVELOPER_FLOOR_PLAN,
+          status: B2BProjectStatus.REVIEW_REQUIRED,
+          roomsRevision: dto.roomsRevision,
+        },
+        data: { roomsRevision: { increment: 1 } },
+      });
+      if (claimed.count !== 1) {
+        const current = await tx.b2BProject.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            type: true,
+            status: true,
+            roomsRevision: true,
+          },
+        });
+        if (!current) {
+          throw new NotFoundException('B2B project not found');
+        }
+        if (current.roomsRevision !== dto.roomsRevision) {
+          throw new ConflictException(
+            'Rooms were changed by another manager',
+          );
+        }
+        throw new ConflictException(
+          'Rooms cannot be changed in the current state',
+        );
+      }
+
+      await tx.b2BRoom.deleteMany({ where: { b2bProjectId: id } });
+      for (const [sortOrder, room] of dto.rooms.entries()) {
+        await tx.b2BRoom.create({
+          data: {
+            b2bProjectId: id,
+            status: room.isIncluded
+              ? B2BRoomStatus.REVIEW_REQUIRED
+              : B2BRoomStatus.SKIPPED,
+            sourceLabel: room.sourceLabel?.trim() || null,
+            name: room.name.trim(),
+            roomType: room.roomType ?? null,
+            styleOverride: room.styleOverride ?? null,
+            widthCm: room.widthCm ?? null,
+            depthCm: room.depthCm ?? null,
+            areaM2: room.areaM2 ?? null,
+            ceilingHeightCm: room.ceilingHeightCm ?? null,
+            polygon: room.polygon as unknown as Prisma.InputJsonValue,
+            recognitionConfidence: room.recognitionConfidence ?? null,
+            recognitionNotes: room.recognitionNotes?.trim() || null,
+            sortOrder,
+            isIncluded: room.isIncluded,
+            openings: {
+              create: room.openings.map((opening) => ({
+                kind: opening.kind,
+                wallSegmentIndex: opening.wallSegmentIndex,
+                positionRatio: opening.positionRatio,
+                widthCm: opening.widthCm ?? null,
+                recognitionConfidence:
+                  opening.recognitionConfidence ?? null,
+              })),
+            },
+          },
+        });
+      }
+
+      const project = await tx.b2BProject.findUnique({
+        where: { id },
+        include: projectDetailInclude,
+      });
+      if (!project) throw new NotFoundException('B2B project not found');
+      return project;
+    });
+  }
+
+  async confirmRooms(id: string) {
+    const project = await this.prisma.b2BProject.findUnique({
+      where: { id },
+      include: { rooms: { include: { openings: true } } },
+    });
+    if (!project) throw new NotFoundException('B2B project not found');
+    if (
+      project.type !== B2BProjectType.DEVELOPER_FLOOR_PLAN ||
+      project.status !== B2BProjectStatus.REVIEW_REQUIRED
+    ) {
+      throw new ConflictException(
+        'Rooms cannot be confirmed in the current state',
+      );
+    }
+    const includedRooms = project.rooms.filter((room) => room.isIncluded);
+    if (includedRooms.length === 0) {
+      throw new BadRequestException('Include at least one room');
+    }
+    for (const room of includedRooms) {
+      this.validateRoomDraft({
+        ...room,
+        polygon: room.polygon as unknown as B2BRoomDraftDto['polygon'],
+      });
+      if (!room.roomType || !room.widthCm || !room.depthCm) {
+        throw new BadRequestException(
+          `Room "${room.name}" requires type, width, and depth`,
+        );
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.b2BRoom.updateMany({
+        where: { b2bProjectId: id, isIncluded: true },
+        data: { status: B2BRoomStatus.READY_TO_GENERATE },
+      });
+      await tx.b2BRoom.updateMany({
+        where: { b2bProjectId: id, isIncluded: false },
+        data: { status: B2BRoomStatus.SKIPPED },
+      });
+      return tx.b2BProject.update({
+        where: { id },
+        data: { status: B2BProjectStatus.READY_TO_GENERATE },
+        include: projectDetailInclude,
+      });
+    });
   }
 
   async update(id: string, dto: UpdateB2BProjectDto) {
@@ -187,6 +432,14 @@ export class B2BProjectsService {
 
   async getCatalog(id: string, query: B2BProjectCatalogQueryDto) {
     const project = await this.requireProject(id);
+    if (
+      project.type !== B2BProjectType.FURNITURE_LINE ||
+      !project.supplierId
+    ) {
+      throw new BadRequestException(
+        'Catalog selection is only available for furniture projects',
+      );
+    }
     const where: Prisma.ProductWhereInput = {
       supplierId: project.supplierId,
       isActive: true,
@@ -219,7 +472,11 @@ export class B2BProjectsService {
   async replaceProducts(id: string, productIds: string[]) {
     return this.prisma.$transaction(async (tx) => {
       const claimed = await tx.b2BProject.updateMany({
-        where: { id, status: { in: [...mutableProjectStatuses] } },
+        where: {
+          id,
+          type: B2BProjectType.FURNITURE_LINE,
+          status: { in: [...mutableProjectStatuses] },
+        },
         data: { status: B2BProjectStatus.DRAFT },
       });
       if (claimed.count !== 1) {
@@ -228,9 +485,17 @@ export class B2BProjectsService {
 
       const project = await tx.b2BProject.findUnique({
         where: { id },
-        select: { supplierId: true, sourceImageUrl: true },
+        select: { type: true, supplierId: true, sourceImageUrl: true },
       });
       if (!project) throw new NotFoundException('B2B project not found');
+      if (
+        project.type !== B2BProjectType.FURNITURE_LINE ||
+        !project.supplierId
+      ) {
+        throw new BadRequestException(
+          'Product selection is only available for furniture projects',
+        );
+      }
       const products = await this.loadValidProducts(
         project.supplierId,
         productIds,
@@ -264,6 +529,7 @@ export class B2BProjectsService {
       const claimed = await tx.b2BProject.updateMany({
         where: {
           id,
+          type: B2BProjectType.FURNITURE_LINE,
           status: {
             in: [
               B2BProjectStatus.READY_TO_GENERATE,
@@ -287,6 +553,15 @@ export class B2BProjectsService {
         },
       });
       if (!project) throw new NotFoundException('B2B project not found');
+      if (
+        project.type !== B2BProjectType.FURNITURE_LINE ||
+        !project.supplierId ||
+        !project.roomType
+      ) {
+        throw new BadRequestException(
+          'Furniture generation requires a supplier and room type',
+        );
+      }
       const productIds = project.products.map(({ productId }) => productId);
       await this.loadValidProducts(
         project.supplierId,
@@ -424,6 +699,69 @@ export class B2BProjectsService {
     const project = await this.prisma.b2BProject.findUnique({ where: { id } });
     if (!project) throw new NotFoundException('B2B project not found');
     return project;
+  }
+
+  private async requireDeveloperProject(id: string) {
+    const project = await this.requireProject(id);
+    if (project.type !== B2BProjectType.DEVELOPER_FLOOR_PLAN) {
+      throw new BadRequestException(
+        'Floor-plan analysis is only available for developer projects',
+      );
+    }
+    return project;
+  }
+
+  private validateRoomDraft(
+    room: Pick<
+      B2BRoomDraftDto,
+      'name' | 'polygon' | 'openings' | 'isIncluded'
+    >,
+  ) {
+    if (!room.name?.trim()) {
+      throw new BadRequestException('Every room requires a name');
+    }
+    if (!Array.isArray(room.polygon) || room.polygon.length < 3) {
+      throw new BadRequestException(
+        `Room "${room.name}" requires at least three polygon points`,
+      );
+    }
+    const distinct = new Set<string>();
+    for (const point of room.polygon) {
+      if (
+        typeof point.x !== 'number' ||
+        typeof point.y !== 'number' ||
+        !Number.isFinite(point.x) ||
+        !Number.isFinite(point.y) ||
+        point.x < 0 ||
+        point.x > 1 ||
+        point.y < 0 ||
+        point.y > 1
+      ) {
+        throw new BadRequestException(
+          `Room "${room.name}" has an invalid polygon point`,
+        );
+      }
+      distinct.add(`${point.x.toFixed(6)}:${point.y.toFixed(6)}`);
+    }
+    if (distinct.size < 3) {
+      throw new BadRequestException(
+        `Room "${room.name}" polygon points must be distinct`,
+      );
+    }
+    for (const opening of room.openings ?? []) {
+      if (
+        !Number.isInteger(opening.wallSegmentIndex) ||
+        opening.wallSegmentIndex < 0 ||
+        opening.wallSegmentIndex >= room.polygon.length ||
+        !Number.isFinite(opening.positionRatio) ||
+        opening.positionRatio < 0 ||
+        opening.positionRatio > 1
+      ) {
+        throw new BadRequestException(
+          `Room "${room.name}" has an invalid opening`,
+        );
+      }
+    }
   }
 
   private async requireActiveSupplier(supplierId: string) {

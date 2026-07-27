@@ -7,6 +7,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  B2BProjectType,
   B2BProjectStatus,
   GenerationScenario,
   InteriorStyle,
@@ -53,6 +54,7 @@ function product(id, overrides = {}) {
 function projectRecord(overrides = {}) {
   return {
     id: 'b2b-project-1',
+    type: B2BProjectType.FURNITURE_LINE,
     name: 'Новая линейка',
     partnerName: 'Мебельный дом',
     supplierId: 'supplier-1',
@@ -66,6 +68,30 @@ function projectRecord(overrides = {}) {
     ...overrides,
   };
 }
+
+test('furniture catalog rejects developer projects without a supplier', async () => {
+  const service = new B2BProjectsService(
+    {
+      b2BProject: {
+        findUnique: async () =>
+          projectRecord({
+            type: B2BProjectType.DEVELOPER_FLOOR_PLAN,
+            supplierId: null,
+            roomType: null,
+          }),
+      },
+    },
+    { enqueueGeneration: async () => undefined },
+  );
+
+  await assert.rejects(
+    service.getCatalog('b2b-project-1', {
+      limit: 24,
+      offset: 0,
+    }),
+    (error) => error instanceof BadRequestException,
+  );
+});
 
 test('create persists an optional empty-room sourceImageUrl', async () => {
   let createArgs;

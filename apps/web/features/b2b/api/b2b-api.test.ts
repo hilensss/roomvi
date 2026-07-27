@@ -8,12 +8,15 @@ vi.mock('@/shared/api/api-client', () => ({ apiFetch, buildApiUrl }));
 
 import {
   createB2BProject,
+  confirmB2BRooms,
   getB2BVariantDownloadUrl,
   getB2BProject,
   getB2BProjectCatalog,
   listB2BProjects,
   listB2BSuppliers,
   replaceB2BProjectProducts,
+  replaceB2BRooms,
+  startB2BFloorPlanAnalysis,
   startB2BProjectGeneration,
   uploadB2BRoomImage,
 } from './b2b-api';
@@ -103,6 +106,35 @@ describe('b2b api', () => {
   it('builds a protected attachment endpoint for generated images', () => {
     expect(getB2BVariantDownloadUrl('project-1', 'variant-1')).toBe(
       'https://api.example.com/manager/b2b-projects/project-1/variants/variant-1/download',
+    );
+  });
+
+  it('uses revision-safe developer analysis and room endpoints', async () => {
+    await startB2BFloorPlanAnalysis('project-1');
+    await replaceB2BRooms({
+      projectId: 'project-1',
+      roomsRevision: 2,
+      rooms: [],
+    });
+    await confirmB2BRooms('project-1');
+
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      1,
+      '/manager/b2b-projects/project-1/analyze-floor-plan',
+      { method: 'POST' },
+    );
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      2,
+      '/manager/b2b-projects/project-1/rooms',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ roomsRevision: 2, rooms: [] }),
+      },
+    );
+    expect(apiFetch).toHaveBeenNthCalledWith(
+      3,
+      '/manager/b2b-projects/project-1/rooms/confirm',
+      { method: 'POST' },
     );
   });
 });

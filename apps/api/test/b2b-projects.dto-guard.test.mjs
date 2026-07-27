@@ -100,6 +100,32 @@ test('CreateB2BProjectDto accepts the furniture project fields and rejects inval
   }
 });
 
+test('CreateB2BProjectDto accepts developer projects without furniture-only fields', async () => {
+  const dto = await transform(CreateB2BProjectDto, {
+    type: 'DEVELOPER_FLOOR_PLAN',
+    name: 'Квартира 12',
+    partnerName: 'Новый девелопер',
+    style: 'MODERN',
+    sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+    defaultCeilingHeightCm: 285,
+  });
+
+  assert.equal(dto.type, 'DEVELOPER_FLOOR_PLAN');
+  assert.equal(dto.supplierId, undefined);
+  assert.equal(dto.roomType, undefined);
+  assert.equal(dto.defaultCeilingHeightCm, 285);
+
+  await assert.rejects(
+    transform(CreateB2BProjectDto, {
+      type: 'DEVELOPER_FLOOR_PLAN',
+      name: 'Квартира 12',
+      partnerName: 'Новый девелопер',
+      style: 'MODERN',
+    }),
+    (error) => error instanceof BadRequestException,
+  );
+});
+
 test('ReplaceB2BProjectProductsDto requires 1–10 unique product ids', async () => {
   const ids = Array.from(
     { length: 10 },

@@ -14,11 +14,15 @@ import {
   useReplaceB2BProjectProductsMutation,
   useStartB2BProjectGenerationMutation,
 } from '../api/b2b-queries';
+import { DeveloperProjectWorkspace } from './developer-project-workspace';
 
 const statusLabels = {
   DRAFT: 'Черновик',
+  ANALYZING: 'Распознавание',
+  REVIEW_REQUIRED: 'Нужна проверка',
   READY_TO_GENERATE: 'Готов к генерации',
   GENERATING: 'Генерация',
+  PARTIALLY_COMPLETED: 'Готово частично',
   COMPLETED: 'Готово',
   FAILED: 'Ошибка',
 } as const;
@@ -37,7 +41,11 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
     if (search.trim()) params.set('search', search.trim());
     return params;
   }, [catalogPage, search]);
-  const catalogQuery = useB2BProjectCatalogQuery(projectId, catalogParams);
+  const catalogQuery = useB2BProjectCatalogQuery(
+    projectId,
+    catalogParams,
+    projectQuery.data?.type === 'FURNITURE_LINE',
+  );
   const replaceMutation = useReplaceB2BProjectProductsMutation();
   const startMutation = useStartB2BProjectGenerationMutation();
   const [selectionOverride, setSelectionOverride] = useState<string[] | null>(
@@ -52,6 +60,9 @@ export function B2BProjectWorkspace({ projectId }: { projectId: string }) {
   }
   if (projectQuery.isError || !project) {
     return <PageState>Не удалось загрузить проект.</PageState>;
+  }
+  if (project.type === 'DEVELOPER_FLOOR_PLAN') {
+    return <DeveloperProjectWorkspace project={project} />;
   }
 
   const savedIds = project.products.map(({ productId }) => productId);

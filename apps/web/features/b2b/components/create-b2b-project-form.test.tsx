@@ -5,6 +5,7 @@ import { renderWithQueryClient, screen } from '@/test/render';
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   mutateAsync: vi.fn(),
+  startAnalysis: vi.fn(),
   uploadB2BRoomImage: vi.fn(),
 }));
 
@@ -19,6 +20,10 @@ vi.mock('../api/b2b-queries', () => ({
   }),
   useCreateB2BProjectMutation: () => ({
     mutateAsync: mocks.mutateAsync,
+    isPending: false,
+  }),
+  useStartB2BFloorPlanAnalysisMutation: () => ({
+    mutateAsync: mocks.startAnalysis,
     isPending: false,
   }),
 }));
@@ -77,5 +82,52 @@ it('uploads an empty-room photo before creating the project', async () => {
     expect.objectContaining({
       sourceImageUrl: 'https://cdn.example.com/empty-room.jpg',
     }),
+  );
+});
+
+it('creates a developer project from a floor plan and starts analysis automatically', async () => {
+  mocks.uploadB2BRoomImage.mockResolvedValue({
+    file: { url: 'https://cdn.example.com/floor-plan.jpg' },
+  });
+  mocks.mutateAsync.mockResolvedValue({
+    id: 'developer-project-1',
+    type: 'DEVELOPER_FLOOR_PLAN',
+  });
+  mocks.startAnalysis.mockResolvedValue({ id: 'analysis-1' });
+  const user = userEvent.setup();
+  renderWithQueryClient(<CreateB2BProjectForm />);
+
+  await user.click(
+    screen.getByRole('button', { name: 'Для застройщика' }),
+  );
+  expect(screen.queryByLabelText('Поставщик')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Комната')).not.toBeInTheDocument();
+
+  await user.type(screen.getByLabelText('Название проекта'), 'Квартира 12');
+  await user.type(screen.getByLabelText('Партнёр'), 'Новый девелопер');
+  const file = new File(['plan'], 'floor-plan.jpg', {
+    type: 'image/jpeg',
+  });
+  await user.upload(screen.getByLabelText('Планировка квартиры'), file);
+  await user.clear(screen.getByLabelText('Высота потолка, см'));
+  await user.type(screen.getByLabelText('Высота потолка, см'), '285');
+  const submit = screen.getByRole('button', {
+    name: 'Создать и распознать',
+  });
+  expect(submit).toBeEnabled();
+  await user.click(submit);
+
+  expect(mocks.mutateAsync).toHaveBeenCalledWith({
+    type: 'DEVELOPER_FLOOR_PLAN',
+    name: 'Квартира 12',
+    partnerName: 'Новый девелопер',
+    style: 'SCANDI',
+    defaultCeilingHeightCm: 285,
+    managerComment: '',
+    sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+  });
+  expect(mocks.startAnalysis).toHaveBeenCalledWith('developer-project-1');
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/manager/projects/developer-project-1',
   );
 });

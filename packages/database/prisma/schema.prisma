@@ -109,16 +109,43 @@ enum GenerationProvider {
 enum GenerationScenario {
   MARKETPLACE
   B2B_FURNITURE_LINE
+  B2B_DEVELOPER_ROOM
 }
 
 enum B2BProjectType {
   FURNITURE_LINE
+  DEVELOPER_FLOOR_PLAN
 }
 
 enum B2BProjectStatus {
   DRAFT
+  ANALYZING
+  REVIEW_REQUIRED
   READY_TO_GENERATE
   GENERATING
+  PARTIALLY_COMPLETED
+  COMPLETED
+  FAILED
+}
+
+enum B2BRoomStatus {
+  DETECTED
+  REVIEW_REQUIRED
+  READY_TO_GENERATE
+  GENERATING
+  GENERATED
+  FAILED
+  SKIPPED
+}
+
+enum B2BOpeningKind {
+  WINDOW
+  DOOR
+}
+
+enum B2BAnalysisStatus {
+  PENDING
+  PROCESSING
   COMPLETED
   FAILED
 }
@@ -286,6 +313,7 @@ model RoomProject {
   generationJobs          GenerationJob[]
   designVariants          DesignVariant[]
   b2bProject              B2BProject?
+  b2bRoom                 B2BRoom?
   selectedDesignVariantId String?
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
@@ -324,6 +352,8 @@ model GenerationJob {
   startedAt      DateTime?
   completedAt    DateTime?
   designVariants DesignVariant[]
+  b2bRoomId       String?
+  b2bRoom         B2BRoom?            @relation(fields: [b2bRoomId], references: [id], onDelete: SetNull)
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -333,6 +363,7 @@ model GenerationJob {
   @@index([status])
   @@index([provider])
   @@index([scenario])
+  @@index([b2bRoomId])
 }
 
 model DesignVariant {
@@ -377,29 +408,103 @@ model DesignVariantProduct {
 }
 
 model B2BProject {
-  id             String              @id @default(uuid())
-  type           B2BProjectType      @default(FURNITURE_LINE)
-  status         B2BProjectStatus    @default(DRAFT)
-  name           String
-  partnerName    String
-  supplierId     String
-  supplier       Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  roomType       RoomType
-  style          InteriorStyle
-  managerComment String?
-  sourceImageUrl String?
-  createdById    String
-  createdBy      User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  roomProjectId  String?             @unique
-  roomProject    RoomProject?        @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
-  products       B2BProjectProduct[]
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  id                       String                 @id @default(uuid())
+  type                     B2BProjectType         @default(FURNITURE_LINE)
+  status                   B2BProjectStatus       @default(DRAFT)
+  name                     String
+  partnerName              String
+  supplierId               String?
+  supplier                 Supplier?              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  roomType                 RoomType?
+  style                    InteriorStyle
+  managerComment           String?
+  sourceImageUrl           String?
+  sourcePlanFileId         String?
+  sourcePlanPreviewUrl     String?
+  defaultCeilingHeightCm   Int                    @default(270)
+  roomsRevision            Int                    @default(0)
+  createdById              String
+  createdBy                User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  roomProjectId            String?                @unique
+  roomProject              RoomProject?           @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
+  products                 B2BProjectProduct[]
+  rooms                    B2BRoom[]
+  analysisRuns             FloorPlanAnalysisRun[]
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
 
   @@index([status])
   @@index([supplierId])
   @@index([createdById])
   @@index([createdAt])
+}
+
+model B2BRoom {
+  id                       String           @id @default(uuid())
+  b2bProjectId             String
+  b2bProject               B2BProject       @relation(fields: [b2bProjectId], references: [id], onDelete: Cascade)
+  status                   B2BRoomStatus    @default(REVIEW_REQUIRED)
+  sourceLabel              String?
+  name                     String
+  roomType                 RoomType?
+  styleOverride            InteriorStyle?
+  widthCm                  Int?
+  depthCm                  Int?
+  areaM2                   Float?
+  ceilingHeightCm          Int?
+  polygon                  Json
+  recognitionConfidence    Float?
+  recognitionNotes         String?
+  sortOrder                Int
+  isIncluded               Boolean          @default(true)
+  roomProjectId            String?          @unique
+  roomProject              RoomProject?     @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
+  shellFileId              String?
+  shellGeometryFingerprint String?
+  openings                 B2BRoomOpening[]
+  generationJobs           GenerationJob[]
+  createdAt                DateTime         @default(now())
+  updatedAt                DateTime         @updatedAt
+
+  @@index([b2bProjectId, sortOrder])
+  @@index([status])
+}
+
+model B2BRoomOpening {
+  id                    String         @id @default(uuid())
+  b2bRoomId             String
+  b2bRoom               B2BRoom        @relation(fields: [b2bRoomId], references: [id], onDelete: Cascade)
+  kind                  B2BOpeningKind
+  wallSegmentIndex      Int
+  positionRatio         Float
+  widthCm               Int?
+  recognitionConfidence Float?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([b2bRoomId])
+}
+
+model FloorPlanAnalysisRun {
+  id           String            @id @default(uuid())
+  b2bProjectId String
+  b2bProject   B2BProject        @relation(fields: [b2bProjectId], references: [id], onDelete: Cascade)
+  status       B2BAnalysisStatus @default(PENDING)
+  provider     String?
+  model        String?
+  progress     Int               @default(0)
+  currentStep  String?
+  errorMessage String?
+  warnings     Json?
+  inputTokens  Int?
+  outputTokens Int?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([b2bProjectId, createdAt])
+  @@index([status])
 }
 
 model B2BProjectProduct {

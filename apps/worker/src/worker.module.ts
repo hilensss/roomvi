@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GENERATION_QUEUE_NAME } from '@roomvi/shared';
 import { CatalogReadModule } from './modules/catalog/catalog-read.module.js';
 import { GenerationProcessingModule } from './modules/generation-processing/generation-processing.module.js';
+import { FloorPlanAnalysisModule } from './modules/floor-plan-analysis/floor-plan-analysis.module.js';
 import { PrismaModule } from './modules/prisma/prisma.module.js';
 import { GenerationProcessor } from './processors/generation.processor.js';
 @Module({
@@ -25,6 +26,7 @@ import { GenerationProcessor } from './processors/generation.processor.js';
     PrismaModule,
     CatalogReadModule,
     GenerationProcessingModule,
+    FloorPlanAnalysisModule,
   ],
   providers: [GenerationProcessor],
 })
