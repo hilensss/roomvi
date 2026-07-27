@@ -116,7 +116,7 @@ describe('b2b api', () => {
       roomsRevision: 2,
       rooms: [],
     });
-    await confirmB2BRooms('project-1');
+    await confirmB2BRooms('project-1', 2);
 
     expect(apiFetch).toHaveBeenNthCalledWith(
       1,
@@ -134,7 +134,7 @@ describe('b2b api', () => {
     expect(apiFetch).toHaveBeenNthCalledWith(
       3,
       '/manager/b2b-projects/project-1/rooms/confirm',
-      { method: 'POST' },
+      { method: 'POST', body: JSON.stringify({ roomsRevision: 2 }) },
     );
   });
 });

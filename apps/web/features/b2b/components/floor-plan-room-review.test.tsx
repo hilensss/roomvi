@@ -1,14 +1,19 @@
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { renderWithQueryClient, screen } from '@/test/render';
+import { ApiError } from '@/shared/api/api-client';
 import type { DeveloperB2BProject } from '../model/b2b.types';
 
 const mocks = vi.hoisted(() => ({
   replaceRooms: vi.fn(),
   confirmRooms: vi.fn(),
+  getProject: vi.fn(),
 }));
 
 vi.mock('../api/b2b-queries', () => ({
+  b2bQueryKeys: {
+    detail: (projectId: string) => ['manager', 'b2b-projects', projectId],
+  },
   useReplaceB2BRoomsMutation: () => ({
     mutateAsync: mocks.replaceRooms,
     isPending: false,
@@ -17,6 +22,9 @@ vi.mock('../api/b2b-queries', () => ({
     mutateAsync: mocks.confirmRooms,
     isPending: false,
   }),
+}));
+vi.mock('../api/b2b-api', () => ({
+  getB2BProject: mocks.getProject,
 }));
 
 import { FloorPlanRoomReview } from './floor-plan-room-review';
@@ -41,7 +49,7 @@ const project = {
   analysisRuns: [],
   rooms: [
     {
-      id: 'room-1',
+      id: '11111111-1111-4111-8111-111111111111',
       status: 'REVIEW_REQUIRED',
       sourceLabel: null,
       name: 'Комната 1',
@@ -75,6 +83,7 @@ beforeEach(() => {
     ...project,
     status: 'READY_TO_GENERATE',
   });
+  mocks.getProject.mockResolvedValue(project);
 });
 
 it('shows the detected polygon and blocks confirmation until the room is reviewed', async () => {
@@ -100,7 +109,7 @@ it('shows the detected polygon and blocks confirmation until the room is reviewe
     roomsRevision: 1,
     rooms: [
       expect.objectContaining({
-        id: 'room-1',
+        id: '11111111-1111-4111-8111-111111111111',
         roomType: 'LIVING_ROOM',
         openings: [
           expect.objectContaining({
@@ -123,4 +132,52 @@ it('updates polygon coordinates through accessible controls', async () => {
   await user.type(xInput, '0.2');
 
   expect(xInput).toHaveValue(0.2);
+});
+
+it('omits temporary room and opening ids when saving manual additions', async () => {
+  const user = userEvent.setup();
+  renderWithQueryClient(<FloorPlanRoomReview project={project} />);
+
+  await user.click(screen.getByRole('button', { name: 'Добавить комнату' }));
+  await user.selectOptions(screen.getByLabelText('Тип комнаты'), 'BEDROOM');
+  await user.clear(screen.getByLabelText('Ширина, см'));
+  await user.type(screen.getByLabelText('Ширина, см'), '320');
+  await user.clear(screen.getByLabelText('Глубина, см'));
+  await user.type(screen.getByLabelText('Глубина, см'), '410');
+  await user.click(screen.getByRole('button', { name: 'Добавить окно' }));
+  await user.click(screen.getByRole('button', { name: 'Сохранить комнаты' }));
+
+  const submittedRooms = mocks.replaceRooms.mock.calls[0][0].rooms;
+  const addedRoom = submittedRooms.at(-1);
+  assertNoTemporaryId(addedRoom.id);
+  assertNoTemporaryId(addedRoom.openings[0].id);
+});
+
+function assertNoTemporaryId(value: unknown) {
+  expect(value === undefined || /^[0-9a-f-]{36}$/i.test(String(value))).toBe(
+    true,
+  );
+}
+
+it('reloads the latest room draft after a revision conflict', async () => {
+  mocks.replaceRooms.mockRejectedValue(
+    new ApiError('Rooms were changed by another manager', 409),
+  );
+  mocks.getProject.mockResolvedValue({
+    ...project,
+    roomsRevision: 2,
+    rooms: [{ ...project.rooms[0], name: 'Актуальная гостиная' }],
+  });
+  const user = userEvent.setup();
+  renderWithQueryClient(<FloorPlanRoomReview project={project} />);
+
+  await user.type(screen.getByLabelText('Название'), ' локально');
+  await user.click(screen.getByRole('button', { name: 'Сохранить комнаты' }));
+
+  expect(await screen.findByDisplayValue('Актуальная гостиная')).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      'Комнаты изменились в другой вкладке. Загружена актуальная версия.',
+    ),
+  ).toBeInTheDocument();
 });

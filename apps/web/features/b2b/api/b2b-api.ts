@@ -96,10 +96,16 @@ export function replaceB2BRooms(input: ReplaceB2BRoomsInput) {
   );
 }
 
-export function confirmB2BRooms(projectId: string) {
+export function confirmB2BRooms(
+  projectId: string,
+  roomsRevision: number,
+) {
   return apiFetch<B2BProject>(
     `/manager/b2b-projects/${projectId}/rooms/confirm`,
-    { method: 'POST' },
+    {
+      method: 'POST',
+      body: JSON.stringify({ roomsRevision }),
+    },
   );
 }
 

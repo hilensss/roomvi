@@ -177,7 +177,7 @@ export type CreateB2BProjectInput =
       partnerName: string;
       style: InteriorStyle;
       managerComment?: string;
-      sourceImageUrl: string;
+      sourcePlanFileId: string;
       defaultCeilingHeightCm: number;
     };
 
@@ -188,7 +188,6 @@ export type ReplaceB2BRoomsInput = {
     Omit<
       Pick<
         B2BRoom,
-        | 'id'
         | 'sourceLabel'
         | 'name'
         | 'roomType'
@@ -205,6 +204,7 @@ export type ReplaceB2BRoomsInput = {
       >,
       'openings'
     > & {
+      id?: string;
       openings: Array<Omit<B2BRoomOpening, 'id'> & { id?: string }>;
     }
   >;
@@ -213,4 +213,9 @@ export type ReplaceB2BRoomsInput = {
 export type StartB2BGenerationResponse = {
   project: { id: string };
   job: { id: string; status: GenerationJobStatus };
+};
+
+export type ConfirmB2BRoomsInput = {
+  projectId: string;
+  roomsRevision: number;
 };

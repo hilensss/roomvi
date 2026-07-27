@@ -16,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import type { JwtUser } from '../auth/types/jwt-user.type.js';
 import { B2BProjectsService } from './b2b-projects.service.js';
 import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.js';
+import { ConfirmB2BRoomsDto } from './dto/confirm-b2b-rooms.dto.js';
 import { CreateB2BProjectDto } from './dto/create-b2b-project.dto.js';
 import { ListB2BProjectsQueryDto } from './dto/list-b2b-projects-query.dto.js';
 import { ReplaceB2BProjectProductsDto } from './dto/replace-b2b-project-products.dto.js';
@@ -63,8 +64,11 @@ export class B2BProjectsController {
   }
 
   @Post(':id/rooms/confirm')
-  confirmRooms(@Param('id') id: string) {
-    return this.b2bProjectsService.confirmRooms(id);
+  confirmRooms(
+    @Param('id') id: string,
+    @Body() dto: ConfirmB2BRoomsDto,
+  ) {
+    return this.b2bProjectsService.confirmRooms(id, dto);
   }
 
   @Get(':id')

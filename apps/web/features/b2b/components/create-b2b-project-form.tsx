@@ -82,8 +82,8 @@ export function CreateB2BProjectForm() {
       if (isDeveloper && !form.sourceImageFile) {
         throw new Error('Загрузите планировку квартиры');
       }
-      const sourceImageUrl = form.sourceImageFile
-        ? (await uploadB2BRoomImage(form.sourceImageFile)).file.url
+      const uploadedFile = form.sourceImageFile
+        ? (await uploadB2BRoomImage(form.sourceImageFile)).file
         : undefined;
       const project = await createMutation.mutateAsync(
         isDeveloper
@@ -94,7 +94,7 @@ export function CreateB2BProjectForm() {
               style: form.style,
               defaultCeilingHeightCm: form.defaultCeilingHeightCm,
               managerComment: form.managerComment.trim(),
-              sourceImageUrl: sourceImageUrl!,
+              sourcePlanFileId: uploadedFile!.id,
             }
           : {
               name: form.name.trim(),
@@ -103,13 +103,17 @@ export function CreateB2BProjectForm() {
               roomType: form.roomType,
               style: form.style,
               managerComment: form.managerComment.trim(),
-              ...(sourceImageUrl ? { sourceImageUrl } : {}),
+              ...(uploadedFile ? { sourceImageUrl: uploadedFile.url } : {}),
             },
       );
-      if (isDeveloper) {
-        await startAnalysisMutation.mutateAsync(project.id);
-      }
       router.push(`/manager/projects/${project.id}`);
+      if (isDeveloper) {
+        try {
+          await startAnalysisMutation.mutateAsync(project.id);
+        } catch {
+          // The project already exists. Its workspace exposes an explicit retry.
+        }
+      }
     } catch (caught) {
       setError(
         caught instanceof Error ? caught.message : 'Не удалось создать проект',

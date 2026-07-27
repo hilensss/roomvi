@@ -106,6 +106,17 @@ export function DeveloperProjectWorkspace({
         </section>
       ) : null}
 
+      {latestAnalysis?.warnings?.length ? (
+        <section className="mt-5 rounded-card border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+          <p className="font-semibold">Что проверить вручную</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {latestAnalysis.warnings.map((warning) => (
+              <li key={warning}>{warning}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {project.status === 'FAILED' || project.status === 'DRAFT' ? (
         <section className="mt-6 rounded-card border border-brand/30 bg-brand-soft p-5">
           <p className="text-sm text-brand">

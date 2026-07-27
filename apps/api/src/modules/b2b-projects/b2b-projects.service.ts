@@ -10,6 +10,7 @@ import {
   B2BProjectStatus,
   B2BProjectType,
   B2BRoomStatus,
+  FileOwnerType,
   GenerationJobStatus,
   GenerationOwnerType,
   GenerationProvider,
@@ -19,10 +20,12 @@ import {
   StockStatus,
   SupplierStatus,
 } from '@roomvi/database';
+import { isSimplePolygon } from '@roomvi/shared';
 import { Readable, Transform } from 'node:stream';
 import { GenerationQueueService } from '../generation-queue/generation-queue.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { B2BProjectCatalogQueryDto } from './dto/b2b-project-catalog-query.dto.js';
+import { ConfirmB2BRoomsDto } from './dto/confirm-b2b-rooms.dto.js';
 import { CreateB2BProjectDto } from './dto/create-b2b-project.dto.js';
 import { ListB2BProjectsQueryDto } from './dto/list-b2b-projects-query.dto.js';
 import {
@@ -30,6 +33,7 @@ import {
   ReplaceB2BRoomsDto,
 } from './dto/replace-b2b-rooms.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
+import { FILE_PURPOSES } from '../files/constants/upload.constants.js';
 
 const mutableProjectStatuses = [
   B2BProjectStatus.DRAFT,
@@ -133,16 +137,30 @@ export class B2BProjectsService {
 
   async create(dto: CreateB2BProjectDto, createdById: string) {
     const type = dto.type ?? B2BProjectType.FURNITURE_LINE;
+    let sourcePlan:
+      | { id: string; url: string; mimeType: string }
+      | undefined;
     if (type === B2BProjectType.FURNITURE_LINE) {
-      if (!dto.supplierId || !dto.roomType) {
+      if (!dto.supplierId || !dto.roomType || dto.sourcePlanFileId) {
         throw new BadRequestException(
           'Furniture project requires a supplier and room type',
         );
       }
       await this.requireActiveSupplier(dto.supplierId);
-    } else if (!dto.sourceImageUrl) {
-      throw new BadRequestException(
-        'Developer project requires a floor-plan image',
+    } else {
+      if (
+        !dto.sourcePlanFileId ||
+        dto.sourceImageUrl ||
+        dto.supplierId ||
+        dto.roomType
+      ) {
+        throw new BadRequestException(
+          'Developer project requires its own uploaded floor-plan file',
+        );
+      }
+      sourcePlan = await this.requireSourcePlanFile(
+        dto.sourcePlanFileId,
+        createdById,
       );
     }
 
@@ -159,7 +177,12 @@ export class B2BProjectsService {
           type === B2BProjectType.FURNITURE_LINE ? dto.roomType : null,
         style: dto.style,
         managerComment: dto.managerComment?.trim() || null,
-        sourceImageUrl: dto.sourceImageUrl ?? null,
+        sourceImageUrl:
+          type === B2BProjectType.DEVELOPER_FLOOR_PLAN
+            ? sourcePlan!.url
+            : dto.sourceImageUrl ?? null,
+        sourcePlanFileId: sourcePlan?.id ?? null,
+        sourcePlanPreviewUrl: sourcePlan?.url ?? null,
         defaultCeilingHeightCm: dto.defaultCeilingHeightCm ?? 270,
         createdById,
       },
@@ -339,37 +362,40 @@ export class B2BProjectsService {
     });
   }
 
-  async confirmRooms(id: string) {
-    const project = await this.prisma.b2BProject.findUnique({
-      where: { id },
-      include: { rooms: { include: { openings: true } } },
-    });
-    if (!project) throw new NotFoundException('B2B project not found');
-    if (
-      project.type !== B2BProjectType.DEVELOPER_FLOOR_PLAN ||
-      project.status !== B2BProjectStatus.REVIEW_REQUIRED
-    ) {
-      throw new ConflictException(
-        'Rooms cannot be confirmed in the current state',
-      );
-    }
-    const includedRooms = project.rooms.filter((room) => room.isIncluded);
-    if (includedRooms.length === 0) {
-      throw new BadRequestException('Include at least one room');
-    }
-    for (const room of includedRooms) {
-      this.validateRoomDraft({
-        ...room,
-        polygon: room.polygon as unknown as B2BRoomDraftDto['polygon'],
-      });
-      if (!room.roomType || !room.widthCm || !room.depthCm) {
-        throw new BadRequestException(
-          `Room "${room.name}" requires type, width, and depth`,
-        );
-      }
-    }
-
+  async confirmRooms(id: string, dto: ConfirmB2BRoomsDto) {
     return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.b2BProject.updateMany({
+        where: {
+          id,
+          type: B2BProjectType.DEVELOPER_FLOOR_PLAN,
+          status: B2BProjectStatus.REVIEW_REQUIRED,
+          roomsRevision: dto.roomsRevision,
+        },
+        data: { status: B2BProjectStatus.READY_TO_GENERATE },
+      });
+      if (claimed.count !== 1) {
+        await this.throwProjectMutationConflict(tx, id);
+      }
+      const project = await tx.b2BProject.findUnique({
+        where: { id },
+        include: { rooms: { include: { openings: true } } },
+      });
+      if (!project) throw new NotFoundException('B2B project not found');
+      const includedRooms = project.rooms.filter((room) => room.isIncluded);
+      if (includedRooms.length === 0) {
+        throw new BadRequestException('Include at least one room');
+      }
+      for (const room of includedRooms) {
+        this.validateRoomDraft({
+          ...room,
+          polygon: room.polygon as unknown as B2BRoomDraftDto['polygon'],
+        });
+        if (!room.roomType || !room.widthCm || !room.depthCm) {
+          throw new BadRequestException(
+            `Room "${room.name}" requires type, width, and depth`,
+          );
+        }
+      }
       await tx.b2BRoom.updateMany({
         where: { b2bProjectId: id, isIncluded: true },
         data: { status: B2BRoomStatus.READY_TO_GENERATE },
@@ -378,9 +404,8 @@ export class B2BProjectsService {
         where: { b2bProjectId: id, isIncluded: false },
         data: { status: B2BRoomStatus.SKIPPED },
       });
-      return tx.b2BProject.update({
+      return tx.b2BProject.findUniqueOrThrow({
         where: { id },
-        data: { status: B2BProjectStatus.READY_TO_GENERATE },
         include: projectDetailInclude,
       });
     });
@@ -388,6 +413,25 @@ export class B2BProjectsService {
 
   async update(id: string, dto: UpdateB2BProjectDto) {
     const currentProject = await this.requireProject(id);
+    if (
+      currentProject.type === B2BProjectType.DEVELOPER_FLOOR_PLAN &&
+      (dto.supplierId !== undefined ||
+        dto.roomType !== undefined ||
+        dto.sourceImageUrl !== undefined ||
+        dto.sourcePlanFileId !== undefined)
+    ) {
+      throw new BadRequestException(
+        'Furniture fields cannot be set on a developer project',
+      );
+    }
+    if (
+      currentProject.type === B2BProjectType.FURNITURE_LINE &&
+      dto.sourcePlanFileId !== undefined
+    ) {
+      throw new BadRequestException(
+        'Floor-plan fields cannot be set on a furniture project',
+      );
+    }
     if (dto.supplierId) await this.requireActiveSupplier(dto.supplierId);
     const supplierChanged =
       dto.supplierId !== undefined &&
@@ -471,6 +515,18 @@ export class B2BProjectsService {
 
   async replaceProducts(id: string, productIds: string[]) {
     return this.prisma.$transaction(async (tx) => {
+      const currentProject = await tx.b2BProject.findUnique({
+        where: { id },
+        select: { type: true },
+      });
+      if (!currentProject) {
+        throw new NotFoundException('B2B project not found');
+      }
+      if (currentProject.type !== B2BProjectType.FURNITURE_LINE) {
+        throw new BadRequestException(
+          'Product selection is only available for furniture projects',
+        );
+      }
       const claimed = await tx.b2BProject.updateMany({
         where: {
           id,
@@ -748,6 +804,11 @@ export class B2BProjectsService {
         `Room "${room.name}" polygon points must be distinct`,
       );
     }
+    if (!isSimplePolygon(room.polygon)) {
+      throw new BadRequestException(
+        `Room "${room.name}" polygon is self-intersecting or has no area`,
+      );
+    }
     for (const opening of room.openings ?? []) {
       if (
         !Number.isInteger(opening.wallSegmentIndex) ||
@@ -770,6 +831,25 @@ export class B2BProjectsService {
       select: { id: true },
     });
     if (!supplier) throw new BadRequestException('Active supplier not found');
+  }
+
+  private async requireSourcePlanFile(fileId: string, userId: string) {
+    const file = await this.prisma.file.findFirst({
+      where: {
+        id: fileId,
+        ownerType: FileOwnerType.USER,
+        userId,
+        purpose: FILE_PURPOSES.ROOM_SOURCE_IMAGE,
+        mimeType: { in: ['image/jpeg', 'image/png', 'image/webp'] },
+      },
+      select: { id: true, url: true, mimeType: true },
+    });
+    if (!file) {
+      throw new BadRequestException(
+        'Uploaded floor-plan file was not found',
+      );
+    }
+    return file;
   }
 
   private async throwProjectMutationConflict(

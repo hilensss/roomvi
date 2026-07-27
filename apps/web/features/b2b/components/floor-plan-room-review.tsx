@@ -1,12 +1,16 @@
 'use client';
 
 import { PointerEvent, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { ApiError } from '@/shared/api/api-client';
 import type { InteriorStyle, RoomType } from '@/shared/api/types';
 import { cn } from '@/shared/lib/cn';
 import {
+  b2bQueryKeys,
   useConfirmB2BRoomsMutation,
   useReplaceB2BRoomsMutation,
 } from '../api/b2b-queries';
+import { getB2BProject } from '../api/b2b-api';
 import type {
   B2BRoom,
   DeveloperB2BProject,
@@ -37,7 +41,10 @@ const b2bStyles: Array<{ value: InteriorStyle; label: string }> = [
   { value: 'HIGH_TECH', label: 'Хай-тек' },
 ];
 
-type EditableRoom = ReplaceB2BRoomsInput['rooms'][number];
+type EditableRoom = Omit<
+  ReplaceB2BRoomsInput['rooms'][number],
+  'id'
+> & { id: string };
 type DragTarget = { roomId: string; pointIndex: number } | null;
 
 const inputClassName =
@@ -59,6 +66,7 @@ export function FloorPlanRoomReview({
   const [message, setMessage] = useState<string | null>(null);
   const replaceMutation = useReplaceB2BRoomsMutation();
   const confirmMutation = useConfirmB2BRoomsMutation();
+  const queryClient = useQueryClient();
 
   const selectedRoom =
     rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
@@ -185,11 +193,34 @@ export function FloorPlanRoomReview({
       await replaceMutation.mutateAsync({
         projectId: project.id,
         roomsRevision: project.roomsRevision,
-        rooms,
+        rooms: rooms.map(toServerRoom),
       });
       setDirty(false);
       setMessage('Комнаты сохранены.');
     } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        try {
+          const refreshed = await queryClient.fetchQuery({
+            queryKey: b2bQueryKeys.detail(project.id),
+            queryFn: () => getB2BProject(project.id),
+          });
+          if (refreshed.type === 'DEVELOPER_FLOOR_PLAN') {
+            const refreshedRooms = refreshed.rooms.map(toEditableRoom);
+            setRoomsState(refreshedRooms);
+            setSelectedRoomId(refreshedRooms[0]?.id ?? '');
+            setDirty(false);
+            setMessage(
+              'Комнаты изменились в другой вкладке. Загружена актуальная версия.',
+            );
+            return;
+          }
+        } catch {
+          setMessage(
+            'Комнаты изменились в другой вкладке. Обновите страницу и повторите изменения.',
+          );
+          return;
+        }
+      }
       setMessage(
         caught instanceof Error
           ? caught.message
@@ -201,7 +232,10 @@ export function FloorPlanRoomReview({
   async function confirmRooms() {
     setMessage(null);
     try {
-      await confirmMutation.mutateAsync(project.id);
+      await confirmMutation.mutateAsync({
+        projectId: project.id,
+        roomsRevision: project.roomsRevision,
+      });
       setMessage('Комнаты подтверждены и готовы к генерации.');
     } catch (caught) {
       setMessage(
@@ -447,6 +481,12 @@ export function FloorPlanRoomReview({
                   {selectedRoom.recognitionNotes}
                 </p>
               ) : null}
+              {selectedRoom.recognitionConfidence !== null ? (
+                <p className="mt-3 text-xs text-ink-soft">
+                  Уверенность распознавания:{' '}
+                  {Math.round(selectedRoom.recognitionConfidence * 100)}%
+                </p>
+              ) : null}
 
               <div className="mt-5 border-t border-line/40 pt-4">
                 <div className="flex items-center justify-between">
@@ -523,7 +563,7 @@ export function FloorPlanRoomReview({
                   {selectedRoom.openings.map((opening, index) => (
                     <div
                       key={opening.id ?? `${selectedRoom.id}-opening-${index}`}
-                      className="grid gap-2 rounded-xl bg-line/10 p-3 sm:grid-cols-4"
+                      className="grid gap-2 rounded-xl bg-line/10 p-3 sm:grid-cols-5"
                     >
                       <select
                         aria-label={`Тип проёма ${index + 1}`}
@@ -547,6 +587,21 @@ export function FloorPlanRoomReview({
                         onChange={(event) =>
                           updateOpening(index, {
                             wallSegmentIndex: Number(event.target.value),
+                          })
+                        }
+                        className={inputClassName}
+                      />
+                      <input
+                        type="number"
+                        min={30}
+                        max={1000}
+                        aria-label={`Ширина проёма ${index + 1}`}
+                        value={opening.widthCm ?? ''}
+                        onChange={(event) =>
+                          updateOpening(index, {
+                            widthCm: event.target.value
+                              ? Number(event.target.value)
+                              : null,
                           })
                         }
                         className={inputClassName}
@@ -641,6 +696,27 @@ function toEditableRoom(room: B2BRoom): EditableRoom {
     isIncluded: room.isIncluded,
     openings: room.openings.map((opening) => ({ ...opening })),
   };
+}
+
+function toServerRoom(
+  room: EditableRoom,
+): ReplaceB2BRoomsInput['rooms'][number] {
+  return {
+    ...room,
+    ...(isUuid(room.id) ? { id: room.id } : { id: undefined }),
+    openings: room.openings.map((opening) => ({
+      ...opening,
+      ...(opening.id && isUuid(opening.id)
+        ? { id: opening.id }
+        : { id: undefined }),
+    })),
+  };
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function openingPoint(

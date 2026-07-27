@@ -1,4 +1,5 @@
 import {
+  GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -72,6 +73,36 @@ export class StorageService {
 
       throw error;
     }
+  }
+
+  async downloadBuffer(key: string, maxBytes: number) {
+    const response = await this.client.send(
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      }),
+    );
+    if (
+      response.ContentLength !== undefined &&
+      response.ContentLength > maxBytes
+    ) {
+      throw new Error('Stored object exceeds the download limit');
+    }
+    if (!response.Body) {
+      throw new Error('Stored object has no body');
+    }
+
+    const chunks: Buffer[] = [];
+    let receivedBytes = 0;
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+      const buffer = Buffer.from(chunk);
+      receivedBytes += buffer.length;
+      if (receivedBytes > maxBytes) {
+        throw new Error('Stored object exceeds the download limit');
+      }
+      chunks.push(buffer);
+    }
+    return Buffer.concat(chunks);
   }
 
   getPublicUrl(key: string): string {

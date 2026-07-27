@@ -14,7 +14,7 @@
 Реализованы:
 
 - создание B2B-проекта типа `DEVELOPER_FLOOR_PLAN`;
-- загрузка JPG, PNG или WebP до 20 МБ;
+- загрузка JPG, PNG или WebP до 10 МБ;
 - фоновый анализ плана через OpenAI Responses API;
 - распознавание комнат, нормализованных полигонов, размеров, площади, типа,
   окон и дверей;
@@ -39,11 +39,14 @@
 ## Поток данных
 
 1. `POST /manager/b2b-projects` создаёт проект с
-   `type=DEVELOPER_FLOOR_PLAN` и `sourceFloorPlanUrl`.
+   `type=DEVELOPER_FLOOR_PLAN` и `sourcePlanFileId`. API принимает только
+   загруженный текущим менеджером raster-файл и само получает его URL и
+   storage key.
 2. `POST /manager/b2b-projects/:id/analyze-floor-plan` атомарно переводит
    проект в `ANALYZING`, создаёт `FloorPlanAnalysisRun` и ставит BullMQ job.
-3. Worker скачивает изображение, проверяет MIME и размер, применяет EXIF
-   rotation и уменьшает большую сторону до 2400 px.
+3. Worker читает изображение из S3-совместимого storage по сохранённому key,
+   проверяет MIME и размер во время чтения, применяет EXIF rotation и уменьшает
+   большую сторону до 2400 px. Произвольные внешние URL не загружаются.
 4. `FloorPlanAnalyzerService` вызывает общий `ReasoningAiService` со строгой
    JSON Schema.
 5. Ответ отдельно валидируется на стороне приложения. Некорректные полигоны,
@@ -52,8 +55,9 @@
    `REVIEW_REQUIRED`, а `roomsRevision` увеличивается.
 7. Менеджер отправляет исправленный полный набор через
    `PUT /manager/b2b-projects/:id/rooms`.
-8. `POST /manager/b2b-projects/:id/rooms/confirm` проверяет включённые комнаты
-   и переводит проект в `READY_TO_GENERATE`.
+8. `POST /manager/b2b-projects/:id/rooms/confirm` принимает текущий
+   `roomsRevision`, атомарно блокирует эту ревизию, проверяет включённые
+   комнаты и переводит проект в `READY_TO_GENERATE`.
 
 ## Reasoning AI
 
@@ -79,6 +83,7 @@ REASONING_AI_TIMEOUT_MS=60000
 - `polygon` хранится как массив нормализованных точек `{x, y}` в диапазоне
   `[0, 1]` относительно исходного изображения.
 - Минимум — три различные точки.
+- Полигон должен иметь ненулевую площадь и не пересекать сам себя.
 - `wallSegmentIndex` openings указывает на ребро от точки с этим индексом к
   следующей точке полигона.
 - `positionRatio` задаёт положение окна или двери на ребре от `0` до `1`.
@@ -95,6 +100,8 @@ REASONING_AI_TIMEOUT_MS=60000
 - `FAILED` — анализ завершился безопасной ошибкой и может быть перезапущен.
 
 Повторный анализ полностью заменяет предыдущий распознанный набор комнат.
+Частичный unique index разрешает только один `PENDING`/`PROCESSING` run на
+проект; до исчерпания queue retry run остаётся активным.
 Сохранение из устаревшей вкладки отклоняется при несовпадении
 `roomsRevision`.
 

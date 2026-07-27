@@ -101,9 +101,13 @@ ALTER TABLE "GenerationJob" ADD COLUMN "b2bRoomId" TEXT;
 CREATE UNIQUE INDEX "B2BRoom_roomProjectId_key" ON "B2BRoom"("roomProjectId");
 CREATE INDEX "B2BRoom_b2bProjectId_sortOrder_idx" ON "B2BRoom"("b2bProjectId", "sortOrder");
 CREATE INDEX "B2BRoom_status_idx" ON "B2BRoom"("status");
+CREATE INDEX "B2BProject_sourcePlanFileId_idx" ON "B2BProject"("sourcePlanFileId");
 CREATE INDEX "B2BRoomOpening_b2bRoomId_idx" ON "B2BRoomOpening"("b2bRoomId");
 CREATE INDEX "FloorPlanAnalysisRun_b2bProjectId_createdAt_idx" ON "FloorPlanAnalysisRun"("b2bProjectId", "createdAt");
 CREATE INDEX "FloorPlanAnalysisRun_status_idx" ON "FloorPlanAnalysisRun"("status");
+CREATE UNIQUE INDEX "FloorPlanAnalysisRun_one_active_per_project"
+ON "FloorPlanAnalysisRun"("b2bProjectId")
+WHERE "status" IN ('PENDING', 'PROCESSING');
 CREATE INDEX "GenerationJob_b2bRoomId_idx" ON "GenerationJob"("b2bRoomId");
 
 -- AddForeignKey
@@ -114,6 +118,10 @@ FOREIGN KEY ("b2bProjectId") REFERENCES "B2BProject"("id") ON DELETE CASCADE ON 
 ALTER TABLE "B2BRoom"
 ADD CONSTRAINT "B2BRoom_roomProjectId_fkey"
 FOREIGN KEY ("roomProjectId") REFERENCES "RoomProject"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+ALTER TABLE "B2BProject"
+ADD CONSTRAINT "B2BProject_sourcePlanFileId_fkey"
+FOREIGN KEY ("sourcePlanFileId") REFERENCES "File"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 ALTER TABLE "B2BRoomOpening"
 ADD CONSTRAINT "B2BRoomOpening_b2bRoomId_fkey"

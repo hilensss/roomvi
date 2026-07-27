@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { RoomType } from '@roomvi/database';
+import {
+  canonicalPolygonSignature,
+  isSimplePolygon,
+} from '@roomvi/shared';
 import { ReasoningAiService } from '../reasoning-ai/reasoning-ai.service.js';
 import type { ReasoningAttachment } from '../reasoning-ai/reasoning-ai.types.js';
 import { floorPlanAnalysisJsonSchema } from './floor-plan-analysis.schema.js';
@@ -131,7 +135,7 @@ export class FloorPlanAnalyzerService {
 
       const widthCm = this.plausibleInteger(proposed.widthCm, 80, 5000);
       const depthCm = this.plausibleInteger(proposed.depthCm, 80, 5000);
-      const areaM2 = this.plausibleNumber(proposed.areaM2, 1, 1000, 1);
+      let areaM2 = this.plausibleNumber(proposed.areaM2, 1, 1000, 1);
       const ceilingHeightCm = this.plausibleInteger(
         proposed.ceilingHeightCm,
         180,
@@ -146,6 +150,18 @@ export class FloorPlanAnalyzerService {
         notes.push('Один или несколько размеров требуют ручной проверки.');
         warnings.push(
           `У комнаты ${index + 1} отброшен неправдоподобный размер.`,
+        );
+      }
+      if (
+        widthCm &&
+        depthCm &&
+        areaM2 &&
+        this.hasGrossAreaMismatch(widthCm, depthCm, areaM2)
+      ) {
+        areaM2 = null;
+        notes.push('Площадь не согласуется с распознанными размерами.');
+        warnings.push(
+          `У комнаты ${index + 1} площадь требует ручной проверки.`,
         );
       }
 
@@ -213,7 +229,7 @@ export class FloorPlanAnalyzerService {
     const distinct = new Set(
       points.map(({ x, y }) => `${x.toFixed(5)}:${y.toFixed(5)}`),
     );
-    return distinct.size >= 3 ? points : null;
+    return distinct.size >= 3 && isSimplePolygon(points) ? points : null;
   }
 
   private normalizeOpenings(
@@ -296,9 +312,17 @@ export class FloorPlanAnalyzerService {
   }
 
   private polygonSignature(polygon: Point[]) {
-    return polygon
-      .map(({ x, y }) => `${x.toFixed(3)}:${y.toFixed(3)}`)
-      .join('|');
+    return canonicalPolygonSignature(polygon);
+  }
+
+  private hasGrossAreaMismatch(
+    widthCm: number,
+    depthCm: number,
+    areaM2: number,
+  ) {
+    const boundingAreaM2 = (widthCm * depthCm) / 10_000;
+    const ratio = areaM2 / boundingAreaM2;
+    return ratio < 0.35 || ratio > 1.25;
   }
 
   private isRecord(value: unknown): value is Record<string, unknown> {

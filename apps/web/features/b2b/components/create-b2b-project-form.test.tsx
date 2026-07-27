@@ -87,7 +87,10 @@ it('uploads an empty-room photo before creating the project', async () => {
 
 it('creates a developer project from a floor plan and starts analysis automatically', async () => {
   mocks.uploadB2BRoomImage.mockResolvedValue({
-    file: { url: 'https://cdn.example.com/floor-plan.jpg' },
+    file: {
+      id: '11111111-1111-4111-8111-111111111111',
+      url: 'https://cdn.example.com/floor-plan.jpg',
+    },
   });
   mocks.mutateAsync.mockResolvedValue({
     id: 'developer-project-1',
@@ -124,9 +127,40 @@ it('creates a developer project from a floor plan and starts analysis automatica
     style: 'SCANDI',
     defaultCeilingHeightCm: 285,
     managerComment: '',
-    sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+    sourcePlanFileId: '11111111-1111-4111-8111-111111111111',
   });
   expect(mocks.startAnalysis).toHaveBeenCalledWith('developer-project-1');
+  expect(mocks.push).toHaveBeenCalledWith(
+    '/manager/projects/developer-project-1',
+  );
+});
+
+it('opens the created project even when automatic analysis start fails', async () => {
+  mocks.uploadB2BRoomImage.mockResolvedValue({
+    file: {
+      id: '11111111-1111-4111-8111-111111111111',
+      url: 'https://cdn.example.com/floor-plan.jpg',
+    },
+  });
+  mocks.mutateAsync.mockResolvedValue({
+    id: 'developer-project-1',
+    type: 'DEVELOPER_FLOOR_PLAN',
+  });
+  mocks.startAnalysis.mockRejectedValue(new Error('queue unavailable'));
+  const user = userEvent.setup();
+  renderWithQueryClient(<CreateB2BProjectForm />);
+
+  await user.click(screen.getByRole('button', { name: 'Для застройщика' }));
+  await user.type(screen.getByLabelText('Название проекта'), 'Квартира 12');
+  await user.type(screen.getByLabelText('Партнёр'), 'Новый девелопер');
+  await user.upload(
+    screen.getByLabelText('Планировка квартиры'),
+    new File(['plan'], 'floor-plan.jpg', { type: 'image/jpeg' }),
+  );
+  await user.click(
+    screen.getByRole('button', { name: 'Создать и распознать' }),
+  );
+
   expect(mocks.push).toHaveBeenCalledWith(
     '/manager/projects/developer-project-1',
   );

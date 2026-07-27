@@ -18,7 +18,13 @@ export class FloorPlanAnalysisService {
     private readonly analyzer: FloorPlanAnalyzerService,
   ) {}
 
-  async process(analysisRunId: string): Promise<void> {
+  async process(
+    analysisRunId: string,
+    attempt: { isRetry: boolean; isFinalAttempt: boolean } = {
+      isRetry: false,
+      isFinalAttempt: true,
+    },
+  ): Promise<void> {
     const run = await this.prisma.floorPlanAnalysisRun.findUnique({
       where: { id: analysisRunId },
       include: { b2bProject: true },
@@ -27,7 +33,7 @@ export class FloorPlanAnalysisService {
     if (run.status === B2BAnalysisStatus.COMPLETED) return;
     if (
       run.b2bProject.type !== B2BProjectType.DEVELOPER_FLOOR_PLAN ||
-      !run.b2bProject.sourceImageUrl
+      !run.b2bProject.sourcePlanFileId
     ) {
       throw new Error('Floor-plan analysis project is invalid');
     }
@@ -36,7 +42,11 @@ export class FloorPlanAnalysisService {
       where: {
         id: analysisRunId,
         status: {
-          in: [B2BAnalysisStatus.PENDING, B2BAnalysisStatus.FAILED],
+          in: [
+            B2BAnalysisStatus.PENDING,
+            B2BAnalysisStatus.FAILED,
+            ...(attempt.isRetry ? [B2BAnalysisStatus.PROCESSING] : []),
+          ],
         },
       },
       data: {
@@ -59,8 +69,17 @@ export class FloorPlanAnalysisService {
     });
 
     try {
+      const sourceFile = await this.prisma.file.findUnique({
+        where: { id: run.b2bProject.sourcePlanFileId },
+        select: {
+          storageKey: true,
+          mimeType: true,
+          sizeBytes: true,
+        },
+      });
+      if (!sourceFile) throw new Error('Floor-plan file not found');
       const attachment = await this.assetService.loadNormalizedImage(
-        run.b2bProject.sourceImageUrl,
+        sourceFile,
       );
       await this.prisma.floorPlanAnalysisRun.updateMany({
         where: {
@@ -133,6 +152,22 @@ export class FloorPlanAnalysisService {
         });
       });
     } catch {
+      if (!attempt.isFinalAttempt) {
+        await this.prisma.floorPlanAnalysisRun.updateMany({
+          where: {
+            id: analysisRunId,
+            status: B2BAnalysisStatus.PROCESSING,
+          },
+          data: {
+            status: B2BAnalysisStatus.PENDING,
+            progress: 0,
+            currentStep: 'Повторяем анализ',
+            errorMessage: null,
+            completedAt: null,
+          },
+        });
+        throw new Error('Floor-plan analysis failed');
+      }
       await Promise.all([
         this.prisma.floorPlanAnalysisRun.update({
           where: { id: analysisRunId },

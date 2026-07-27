@@ -13,6 +13,7 @@ import {
   startB2BFloorPlanAnalysis,
   startB2BProjectGeneration,
 } from './b2b-api';
+import type { ConfirmB2BRoomsInput } from '../model/b2b.types';
 
 export const b2bQueryKeys = {
   all: ['manager', 'b2b-projects'] as const,
@@ -95,7 +96,11 @@ export function useReplaceB2BRoomsMutation() {
 export function useConfirmB2BRoomsMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: confirmB2BRooms,
+    mutationFn: ({
+      projectId,
+      roomsRevision,
+    }: ConfirmB2BRoomsInput) =>
+      confirmB2BRooms(projectId, roomsRevision),
     onSuccess: async (project) => {
       queryClient.setQueryData(b2bQueryKeys.detail(project.id), project);
       await queryClient.invalidateQueries({ queryKey: b2bQueryKeys.lists() });

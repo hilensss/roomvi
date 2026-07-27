@@ -57,7 +57,6 @@ export class CreateB2BProjectDto {
 
   @ValidateIf(
     (value: CreateB2BProjectDto) =>
-      value.type === B2BProjectType.DEVELOPER_FLOOR_PLAN ||
       value.sourceImageUrl !== undefined,
   )
   @IsUrl({
@@ -69,6 +68,13 @@ export class CreateB2BProjectDto {
   @ValidateIf(
     (value: CreateB2BProjectDto) =>
       value.type === B2BProjectType.DEVELOPER_FLOOR_PLAN ||
+      value.sourcePlanFileId !== undefined,
+  )
+  @IsUUID()
+  sourcePlanFileId?: string;
+
+  @ValidateIf(
+    (value: CreateB2BProjectDto) =>
       value.defaultCeilingHeightCm !== undefined,
   )
   @IsInt()

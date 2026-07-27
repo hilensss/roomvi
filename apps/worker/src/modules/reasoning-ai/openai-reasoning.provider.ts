@@ -168,7 +168,13 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
           response.status === 429 || response.status >= 500,
         );
       }
-      return (await response.json()) as OpenAiResponse;
+      try {
+        return (await response.json()) as OpenAiResponse;
+      } catch {
+        throw new ReasoningAiProviderError(
+          'OpenAI returned an invalid response body',
+        );
+      }
     } catch (error) {
       if (error instanceof ReasoningAiProviderError) throw error;
       const timedOut =

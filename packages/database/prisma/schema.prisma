@@ -420,6 +420,7 @@ model B2BProject {
   managerComment           String?
   sourceImageUrl           String?
   sourcePlanFileId         String?
+  sourcePlanFile           File?                  @relation("B2BSourcePlanFile", fields: [sourcePlanFileId], references: [id], onDelete: SetNull)
   sourcePlanPreviewUrl     String?
   defaultCeilingHeightCm   Int                    @default(270)
   roomsRevision            Int                    @default(0)
@@ -435,6 +436,7 @@ model B2BProject {
 
   @@index([status])
   @@index([supplierId])
+  @@index([sourcePlanFileId])
   @@index([createdById])
   @@index([createdAt])
 }
@@ -549,6 +551,8 @@ model File {
   url        String
 
   purpose String?
+
+  b2bSourcePlanProjects B2BProject[] @relation("B2BSourcePlanFile")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

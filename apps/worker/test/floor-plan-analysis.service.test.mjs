@@ -22,6 +22,7 @@ function runRecord(overrides = {}) {
       type: B2BProjectType.DEVELOPER_FLOOR_PLAN,
       status: B2BProjectStatus.ANALYZING,
       sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+      sourcePlanFileId: 'file-1',
     },
     ...overrides,
   };
@@ -81,13 +82,21 @@ test('floor-plan analysis persists reviewable rooms and completes the run atomic
     b2BProject: {
       updateMany: async (args) => calls.push(['project.progress', args]),
     },
+    file: {
+      findUnique: async () => ({
+        id: 'file-1',
+        storageKey: 'uploads/rooms/floor-plan.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      }),
+    },
     $transaction: async (callback) => callback(tx),
   };
   const service = new FloorPlanAnalysisService(
     prisma,
     {
-      loadNormalizedImage: async (url) => {
-        calls.push(['asset.load', url]);
+      loadNormalizedImage: async (file) => {
+        calls.push(['asset.load', file]);
         return {
           name: 'floor-plan.jpg',
           mimeType: 'image/jpeg',
@@ -126,6 +135,52 @@ test('floor-plan analysis persists reviewable rooms and completes the run atomic
     B2BProjectStatus.REVIEW_REQUIRED,
   );
   assert.equal(projectUpdate.data.roomsRevision.increment, 1);
+});
+
+test('a non-final failure returns the run to pending for the same queue retry', async () => {
+  const calls = [];
+  const prisma = {
+    floorPlanAnalysisRun: {
+      findUnique: async () => runRecord(),
+      updateMany: async (args) => {
+        calls.push(['run.updateMany', args]);
+        return { count: 1 };
+      },
+    },
+    b2BProject: {
+      updateMany: async (args) => calls.push(['project.updateMany', args]),
+    },
+    file: {
+      findUnique: async () => ({
+        storageKey: 'uploads/rooms/floor-plan.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      }),
+    },
+  };
+  const service = new FloorPlanAnalysisService(
+    prisma,
+    { loadNormalizedImage: async () => { throw new Error('temporary'); } },
+    { analyze: async () => assert.fail('analyzer must not run') },
+  );
+
+  await assert.rejects(
+    service.process('analysis-1', { isRetry: false, isFinalAttempt: false }),
+    /analysis failed/i,
+  );
+
+  const retryReset = calls
+    .filter(([name]) => name === 'run.updateMany')
+    .at(-1)[1];
+  assert.equal(retryReset.data.status, B2BAnalysisStatus.PENDING);
+  assert.equal(
+    calls.some(
+      ([name, args]) =>
+        name === 'project.updateMany' &&
+        args.data.status === B2BProjectStatus.FAILED,
+    ),
+    false,
+  );
 });
 
 test('floor-plan analysis replay is a no-op after completion', async () => {

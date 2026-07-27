@@ -106,7 +106,7 @@ test('CreateB2BProjectDto accepts developer projects without furniture-only fiel
     name: 'Квартира 12',
     partnerName: 'Новый девелопер',
     style: 'MODERN',
-    sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+    sourcePlanFileId: '11111111-1111-4111-8111-111111111111',
     defaultCeilingHeightCm: 285,
   });
 

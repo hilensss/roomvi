@@ -113,3 +113,20 @@ test('OpenAI reasoning provider rejects invalid structured output without leakin
       !error.message.includes('plan-image'),
   );
 });
+
+test('OpenAI reasoning provider does not retry an invalid HTTP JSON body', async () => {
+  let attempts = 0;
+  const provider = new OpenAiReasoningProvider(config(), async () => {
+    attempts += 1;
+    return new Response('not-json', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
+
+  await assert.rejects(
+    provider.generateStructured(request()),
+    /invalid response body/i,
+  );
+  assert.equal(attempts, 1);
+});
