@@ -123,6 +123,7 @@ export type FurnitureB2BProject = B2BProjectBase & {
 export type DeveloperB2BProject = B2BProjectBase & {
   type: 'DEVELOPER_FLOOR_PLAN';
   supplierId: null;
+  sourcePlanFileId: string;
   supplier: null;
   roomType: null;
 };

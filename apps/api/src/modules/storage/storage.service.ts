@@ -9,4 +9,8 @@ export class StorageService {
   async uploadFile(input: UploadFileInput) {
     return await this.s3StorageProvider.uploadFile(input);
   }
+
+  async downloadFile(key: string, maxBytes: number, timeoutMs?: number) {
+    return this.s3StorageProvider.downloadFile(key, maxBytes, timeoutMs);
+  }
 }

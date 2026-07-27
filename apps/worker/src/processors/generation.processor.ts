@@ -28,8 +28,11 @@ export class GenerationProcessor extends WorkerHost {
         `BullMQ floor-plan analysis started: bullJobId=${job.id}, analysisRunId=${analysisRunId}, attempt=${job.attemptsMade + 1}`,
       );
       const attempts = Number(job.opts.attempts ?? 1);
+      const attemptsStarted = Number(
+        job.attemptsStarted ?? job.attemptsMade + 1,
+      );
       await this.floorPlanAnalysisService.process(analysisRunId, {
-        isRetry: job.attemptsMade > 0,
+        isRecovery: attemptsStarted > 1,
         isFinalAttempt: job.attemptsMade + 1 >= attempts,
       });
       this.logger.log(

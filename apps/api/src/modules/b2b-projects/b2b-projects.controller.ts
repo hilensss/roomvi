@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -9,7 +10,9 @@ import {
   Query,
   Req,
   StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
@@ -23,6 +26,13 @@ import { ReplaceB2BProjectProductsDto } from './dto/replace-b2b-project-products
 import { ReplaceB2BRoomsDto } from './dto/replace-b2b-rooms.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
 import { ManagerGuard } from './guards/manager.guard.js';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import {
+  ALLOWED_ROOM_IMAGE_MIME_TYPES,
+  ROOM_IMAGE_MAX_SIZE_BYTES,
+  ROOM_IMAGE_UPLOAD_FIELD,
+} from '../files/constants/upload.constants.js';
 
 @Controller('manager/b2b-projects')
 @UseGuards(JwtAuthGuard, ManagerGuard)
@@ -45,6 +55,33 @@ export class B2BProjectsController {
     return this.b2bProjectsService.create(dto, user.userId);
   }
 
+  @Post('floor-plans/upload')
+  @UseInterceptors(
+    FileInterceptor(ROOM_IMAGE_UPLOAD_FIELD, {
+      storage: memoryStorage(),
+      limits: { fileSize: ROOM_IMAGE_MAX_SIZE_BYTES },
+      fileFilter: (_request, file, callback) => {
+        if (!ALLOWED_ROOM_IMAGE_MIME_TYPES.includes(file.mimetype as never)) {
+          return callback(
+            new BadRequestException(
+              'Only JPEG, PNG and WEBP images are allowed',
+            ) as never,
+            false,
+          );
+        }
+        return callback(null, true);
+      },
+    }),
+  )
+  uploadFloorPlan(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() request: Request,
+  ) {
+    if (!file) throw new BadRequestException('File is required');
+    const user = request.user as JwtUser;
+    return this.b2bProjectsService.uploadFloorPlan(file, user.userId);
+  }
+
   @Post(':id/analyze-floor-plan')
   analyzeFloorPlan(@Param('id') id: string) {
     return this.b2bProjectsService.startFloorPlanAnalysis(id);
@@ -53,6 +90,16 @@ export class B2BProjectsController {
   @Get(':id/analysis')
   getLatestAnalysis(@Param('id') id: string) {
     return this.b2bProjectsService.getLatestAnalysis(id);
+  }
+
+  @Get(':id/floor-plan')
+  async getFloorPlan(@Param('id') id: string) {
+    const file = await this.b2bProjectsService.downloadFloorPlan(id);
+    return new StreamableFile(file.buffer, {
+      type: file.contentType,
+      disposition: `inline; filename="${file.fileName}"`,
+      length: file.contentLength,
+    });
   }
 
   @Put(':id/rooms')

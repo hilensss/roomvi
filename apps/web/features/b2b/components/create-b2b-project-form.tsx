@@ -4,7 +4,10 @@ import { useRouter } from 'next/navigation';
 import { FormEvent, useState } from 'react';
 import type { InteriorStyle, RoomType } from '@/shared/api/types';
 import { cn } from '@/shared/lib/cn';
-import { uploadB2BRoomImage } from '../api/b2b-api';
+import {
+  uploadB2BFloorPlan,
+  uploadB2BRoomImage,
+} from '../api/b2b-api';
 import {
   useB2BSuppliersQuery,
   useCreateB2BProjectMutation,
@@ -83,8 +86,18 @@ export function CreateB2BProjectForm() {
         throw new Error('Загрузите планировку квартиры');
       }
       const uploadedFile = form.sourceImageFile
-        ? (await uploadB2BRoomImage(form.sourceImageFile)).file
+        ? (
+            await (isDeveloper
+              ? uploadB2BFloorPlan(form.sourceImageFile)
+              : uploadB2BRoomImage(form.sourceImageFile))
+          ).file
         : undefined;
+      const uploadedRoomImageUrl =
+        uploadedFile &&
+        'url' in uploadedFile &&
+        typeof uploadedFile.url === 'string'
+          ? uploadedFile.url
+          : undefined;
       const project = await createMutation.mutateAsync(
         isDeveloper
           ? {
@@ -103,7 +116,9 @@ export function CreateB2BProjectForm() {
               roomType: form.roomType,
               style: form.style,
               managerComment: form.managerComment.trim(),
-              ...(uploadedFile ? { sourceImageUrl: uploadedFile.url } : {}),
+              ...(uploadedRoomImageUrl
+                ? { sourceImageUrl: uploadedRoomImageUrl }
+                : {}),
             },
       );
       router.push(`/manager/projects/${project.id}`);

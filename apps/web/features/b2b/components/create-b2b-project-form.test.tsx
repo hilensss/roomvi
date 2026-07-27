@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
   startAnalysis: vi.fn(),
   uploadB2BRoomImage: vi.fn(),
+  uploadB2BFloorPlan: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -29,6 +30,7 @@ vi.mock('../api/b2b-queries', () => ({
 }));
 vi.mock('../api/b2b-api', () => ({
   uploadB2BRoomImage: mocks.uploadB2BRoomImage,
+  uploadB2BFloorPlan: mocks.uploadB2BFloorPlan,
 }));
 
 import { CreateB2BProjectForm } from './create-b2b-project-form';
@@ -85,11 +87,10 @@ it('uploads an empty-room photo before creating the project', async () => {
   );
 });
 
-it('creates a developer project from a floor plan and starts analysis automatically', async () => {
-  mocks.uploadB2BRoomImage.mockResolvedValue({
+it('creates a developer project from a private floor plan and starts analysis automatically', async () => {
+  mocks.uploadB2BFloorPlan.mockResolvedValue({
     file: {
       id: '11111111-1111-4111-8111-111111111111',
-      url: 'https://cdn.example.com/floor-plan.jpg',
     },
   });
   mocks.mutateAsync.mockResolvedValue({
@@ -120,6 +121,8 @@ it('creates a developer project from a floor plan and starts analysis automatica
   expect(submit).toBeEnabled();
   await user.click(submit);
 
+  expect(mocks.uploadB2BFloorPlan).toHaveBeenCalledWith(file);
+  expect(mocks.uploadB2BRoomImage).not.toHaveBeenCalled();
   expect(mocks.mutateAsync).toHaveBeenCalledWith({
     type: 'DEVELOPER_FLOOR_PLAN',
     name: 'Квартира 12',
@@ -136,10 +139,9 @@ it('creates a developer project from a floor plan and starts analysis automatica
 });
 
 it('opens the created project even when automatic analysis start fails', async () => {
-  mocks.uploadB2BRoomImage.mockResolvedValue({
+  mocks.uploadB2BFloorPlan.mockResolvedValue({
     file: {
       id: '11111111-1111-4111-8111-111111111111',
-      url: 'https://cdn.example.com/floor-plan.jpg',
     },
   });
   mocks.mutateAsync.mockResolvedValue({

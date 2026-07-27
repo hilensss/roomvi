@@ -167,7 +167,7 @@ model User {
 
   files File[]
 
-  carts Cart[]
+  carts  Cart[]
   orders Order[]
 }
 
@@ -206,11 +206,11 @@ model GuestSession {
 
   files File[]
 
+  carts  Cart[]
+  orders Order[]
+
   @@index([expiresAt])
   @@index([convertedUserId])
-  
-  carts Cart[]
-  orders Order[]
 }
 
 model Supplier {
@@ -281,6 +281,9 @@ model Product {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
   @@unique([supplierId, externalId])
   @@index([supplierId])
   @@index([category])
@@ -288,9 +291,6 @@ model Product {
   @@index([isActive])
   @@index([isAiEligible])
   @@index([price])
-
-  cartItems CartItem[]
-  orderItems OrderItem[]
 }
 
 model RoomProject {
@@ -318,32 +318,32 @@ model RoomProject {
   createdAt               DateTime            @default(now())
   updatedAt               DateTime            @updatedAt
 
+  cartItems CartItem[]
+
   @@index([userId])
   @@index([guestSessionId])
   @@index([roomType])
   @@index([style])
   @@index([status])
-
-  cartItems CartItem[]
 }
 
 model GenerationJob {
-  id             String              @id @default(uuid())
-  ownerType      GenerationOwnerType
-  userId         String?
-  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guestSessionId String?
-  guestSession   GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
-  roomProjectId  String
-  roomProject    RoomProject         @relation(fields: [roomProjectId], references: [id], onDelete: Cascade)
-  provider       GenerationProvider  @default(MOCK)
-  status         GenerationJobStatus @default(PENDING)
-  scenario       GenerationScenario  @default(MARKETPLACE)
+  id                String              @id @default(uuid())
+  ownerType         GenerationOwnerType
+  userId            String?
+  user              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guestSessionId    String?
+  guestSession      GuestSession?       @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
+  roomProjectId     String
+  roomProject       RoomProject         @relation(fields: [roomProjectId], references: [id], onDelete: Cascade)
+  provider          GenerationProvider  @default(MOCK)
+  status            GenerationJobStatus @default(PENDING)
+  scenario          GenerationScenario  @default(MARKETPLACE)
   requestedVariants Int?
 
-  externalJobId  String?
-  progress       Int                 @default(0)
-  currentStep    String?
+  externalJobId String?
+  progress      Int     @default(0)
+  currentStep   String?
 
   prompt         String?
   negativePrompt String?
@@ -352,10 +352,10 @@ model GenerationJob {
   startedAt      DateTime?
   completedAt    DateTime?
   designVariants DesignVariant[]
-  b2bRoomId       String?
-  b2bRoom         B2BRoom?            @relation(fields: [b2bRoomId], references: [id], onDelete: SetNull)
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  b2bRoomId      String?
+  b2bRoom        B2BRoom?        @relation(fields: [b2bRoomId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 
   @@index([userId])
   @@index([guestSessionId])
@@ -382,11 +382,11 @@ model DesignVariant {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
+  cartItems CartItem[]
+
   @@index([roomProjectId])
   @@index([generationJobId])
   @@index([isSelected])
-  
-  cartItems CartItem[]
 }
 
 model DesignVariantProduct {
@@ -408,31 +408,31 @@ model DesignVariantProduct {
 }
 
 model B2BProject {
-  id                       String                 @id @default(uuid())
-  type                     B2BProjectType         @default(FURNITURE_LINE)
-  status                   B2BProjectStatus       @default(DRAFT)
-  name                     String
-  partnerName              String
-  supplierId               String?
-  supplier                 Supplier?              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  roomType                 RoomType?
-  style                    InteriorStyle
-  managerComment           String?
-  sourceImageUrl           String?
-  sourcePlanFileId         String?
-  sourcePlanFile           File?                  @relation("B2BSourcePlanFile", fields: [sourcePlanFileId], references: [id], onDelete: SetNull)
-  sourcePlanPreviewUrl     String?
-  defaultCeilingHeightCm   Int                    @default(270)
-  roomsRevision            Int                    @default(0)
-  createdById              String
-  createdBy                User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
-  roomProjectId            String?                @unique
-  roomProject              RoomProject?           @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
-  products                 B2BProjectProduct[]
-  rooms                    B2BRoom[]
-  analysisRuns             FloorPlanAnalysisRun[]
-  createdAt                DateTime               @default(now())
-  updatedAt                DateTime               @updatedAt
+  id                     String                 @id @default(uuid())
+  type                   B2BProjectType         @default(FURNITURE_LINE)
+  status                 B2BProjectStatus       @default(DRAFT)
+  name                   String
+  partnerName            String
+  supplierId             String?
+  supplier               Supplier?              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  roomType               RoomType?
+  style                  InteriorStyle
+  managerComment         String?
+  sourceImageUrl         String?
+  sourcePlanFileId       String?
+  sourcePlanFile         File?                  @relation("B2BSourcePlanFile", fields: [sourcePlanFileId], references: [id], onDelete: SetNull)
+  sourcePlanPreviewUrl   String?
+  defaultCeilingHeightCm Int                    @default(270)
+  roomsRevision          Int                    @default(0)
+  createdById            String
+  createdBy              User                   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  roomProjectId          String?                @unique
+  roomProject            RoomProject?           @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
+  products               B2BProjectProduct[]
+  rooms                  B2BRoom[]
+  analysisRuns           FloorPlanAnalysisRun[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 
   @@index([status])
   @@index([supplierId])
@@ -488,22 +488,23 @@ model B2BRoomOpening {
 }
 
 model FloorPlanAnalysisRun {
-  id           String            @id @default(uuid())
-  b2bProjectId String
-  b2bProject   B2BProject        @relation(fields: [b2bProjectId], references: [id], onDelete: Cascade)
-  status       B2BAnalysisStatus @default(PENDING)
-  provider     String?
-  model        String?
-  progress     Int               @default(0)
-  currentStep  String?
-  errorMessage String?
-  warnings     Json?
-  inputTokens  Int?
-  outputTokens Int?
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id              String            @id @default(uuid())
+  b2bProjectId    String
+  b2bProject      B2BProject        @relation(fields: [b2bProjectId], references: [id], onDelete: Cascade)
+  status          B2BAnalysisStatus @default(PENDING)
+  provider        String?
+  model           String?
+  progress        Int               @default(0)
+  currentStep     String?
+  processingToken String?
+  errorMessage    String?
+  warnings        Json?
+  inputTokens     Int?
+  outputTokens    Int?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([b2bProjectId, createdAt])
   @@index([status])
@@ -536,7 +537,7 @@ model File {
   ownerType FileOwnerType
 
   userId String?
-  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   guestSessionId String?
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
@@ -578,14 +579,14 @@ model Cart {
   id String @id @default(uuid())
 
   userId String?
-  user   User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   guestSessionId String?
   guestSession   GuestSession? @relation(fields: [guestSessionId], references: [id], onDelete: SetNull)
 
   status CartStatus @default(ACTIVE)
 
-  totalAmount Int @default(0)
+  totalAmount Int    @default(0)
   currency    String @default("RUB")
 
   items CartItem[]
@@ -603,16 +604,16 @@ model CartItem {
   id String @id @default(uuid())
 
   cartId String
-  cart   Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  cart   Cart   @relation(fields: [cartId], references: [id], onDelete: Cascade)
 
   productId String
   product   Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   supplierId String
 
-  source CartItemSource @default(CATALOG)
+  source        CartItemSource @default(CATALOG)
   roomProjectId String?
-  roomProject   RoomProject? @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
+  roomProject   RoomProject?   @relation(fields: [roomProjectId], references: [id], onDelete: SetNull)
 
   designVariantId String?
   designVariant   DesignVariant? @relation(fields: [designVariantId], references: [id], onDelete: SetNull)

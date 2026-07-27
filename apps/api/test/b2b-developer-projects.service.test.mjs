@@ -27,7 +27,7 @@ function developerProject(overrides = {}) {
     supplierId: null,
     roomType: null,
     style: InteriorStyle.MODERN,
-    sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+    sourceImageUrl: null,
     sourcePlanFileId: '11111111-1111-4111-8111-111111111111',
     defaultCeilingHeightCm: 270,
     roomsRevision: 0,
@@ -77,7 +77,6 @@ test('create stores a developer project without requiring a supplier', async () 
       file: {
         findFirst: async () => ({
           id: '11111111-1111-4111-8111-111111111111',
-          url: 'https://cdn.example.com/floor-plan.jpg',
           mimeType: 'image/jpeg',
         }),
       },
@@ -110,11 +109,90 @@ test('create stores a developer project without requiring a supplier', async () 
     createArgs.data.sourcePlanFileId,
     '11111111-1111-4111-8111-111111111111',
   );
-  assert.equal(
-    createArgs.data.sourceImageUrl,
-    'https://cdn.example.com/floor-plan.jpg',
-  );
+  assert.equal(createArgs.data.sourceImageUrl, null);
+  assert.equal(createArgs.data.sourcePlanPreviewUrl, null);
   assert.equal(createArgs.data.defaultCeilingHeightCm, 285);
+});
+
+test('floor plans are uploaded without exposing a permanent public URL', async () => {
+  let fileCreate;
+  const service = new B2BProjectsService(
+    {
+      file: {
+        create: async (args) => {
+          fileCreate = args;
+          return {
+            id: 'file-1',
+            originalName: args.data.originalName,
+            mimeType: args.data.mimeType,
+            sizeBytes: args.data.sizeBytes,
+          };
+        },
+      },
+    },
+    {},
+    {
+      uploadFile: async (input) => ({ key: input.key, url: 'https://public.example/private-plan' }),
+    },
+  );
+
+  const result = await service.uploadFloorPlan(
+    {
+      originalname: 'plan.jpg',
+      mimetype: 'image/jpeg',
+      size: 4,
+      buffer: Buffer.from('plan'),
+    },
+    'manager-1',
+  );
+
+  assert.equal(result.file.id, 'file-1');
+  assert.match(
+    fileCreate.data.storageKey,
+    /^uploads\/private\/b2b-floor-plans\//,
+  );
+  assert.match(fileCreate.data.url, /^private:/);
+  assert.equal(
+    JSON.stringify(result).includes('public.example'),
+    false,
+  );
+});
+
+test('floor plans download through project authorization and storage key', async () => {
+  let downloadArgs;
+  const service = new B2BProjectsService(
+    {
+      b2BProject: {
+        findFirst: async () => ({
+          sourcePlanFile: {
+            storageKey: 'uploads/private/b2b-floor-plans/plan.jpg',
+            mimeType: 'image/jpeg',
+            sizeBytes: 4,
+          },
+        }),
+      },
+    },
+    {},
+    {
+      downloadFile: async (...args) => {
+        downloadArgs = args;
+        return {
+          buffer: Buffer.from('plan'),
+          contentType: 'image/jpeg',
+          contentLength: 4,
+        };
+      },
+    },
+  );
+
+  const result = await service.downloadFloorPlan('project-1');
+
+  assert.deepEqual(downloadArgs, [
+    'uploads/private/b2b-floor-plans/plan.jpg',
+    10 * 1024 * 1024,
+    10_000,
+  ]);
+  assert.equal(result.fileName, 'floor-plan.jpg');
 });
 
 test('startFloorPlanAnalysis claims the project and enqueues the created run', async () => {

@@ -83,6 +83,7 @@ CREATE TABLE "FloorPlanAnalysisRun" (
     "model" TEXT,
     "progress" INTEGER NOT NULL DEFAULT 0,
     "currentStep" TEXT,
+    "processingToken" TEXT,
     "errorMessage" TEXT,
     "warnings" JSONB,
     "inputTokens" INTEGER,

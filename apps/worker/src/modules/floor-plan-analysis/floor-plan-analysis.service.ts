@@ -6,6 +6,7 @@ import {
   B2BRoomStatus,
   Prisma,
 } from '@roomvi/database';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { FloorPlanAnalyzerService } from './floor-plan-analyzer.service.js';
 import { FloorPlanAssetService } from './floor-plan-asset.service.js';
@@ -20,8 +21,8 @@ export class FloorPlanAnalysisService {
 
   async process(
     analysisRunId: string,
-    attempt: { isRetry: boolean; isFinalAttempt: boolean } = {
-      isRetry: false,
+    attempt: { isRecovery: boolean; isFinalAttempt: boolean } = {
+      isRecovery: false,
       isFinalAttempt: true,
     },
   ): Promise<void> {
@@ -38,19 +39,22 @@ export class FloorPlanAnalysisService {
       throw new Error('Floor-plan analysis project is invalid');
     }
 
+    const processingToken = randomUUID();
     const claimed = await this.prisma.floorPlanAnalysisRun.updateMany({
       where: {
         id: analysisRunId,
         status: {
           in: [
             B2BAnalysisStatus.PENDING,
-            B2BAnalysisStatus.FAILED,
-            ...(attempt.isRetry ? [B2BAnalysisStatus.PROCESSING] : []),
+            ...(attempt.isRecovery
+              ? [B2BAnalysisStatus.PROCESSING]
+              : []),
           ],
         },
       },
       data: {
         status: B2BAnalysisStatus.PROCESSING,
+        processingToken,
         progress: 10,
         currentStep: 'Подготавливаем планировку',
         errorMessage: null,
@@ -58,7 +62,9 @@ export class FloorPlanAnalysisService {
         completedAt: null,
       },
     });
-    if (claimed.count !== 1) return;
+    if (claimed.count !== 1) {
+      throw new Error('Floor-plan analysis run is not claimable');
+    }
 
     await this.prisma.b2BProject.updateMany({
       where: {
@@ -85,6 +91,7 @@ export class FloorPlanAnalysisService {
         where: {
           id: analysisRunId,
           status: B2BAnalysisStatus.PROCESSING,
+          processingToken,
         },
         data: {
           progress: 35,
@@ -94,6 +101,29 @@ export class FloorPlanAnalysisService {
 
       const analysis = await this.analyzer.analyze(attachment);
       await this.prisma.$transaction(async (tx) => {
+        const completed = await tx.floorPlanAnalysisRun.updateMany({
+          where: {
+            id: analysisRunId,
+            status: B2BAnalysisStatus.PROCESSING,
+            processingToken,
+          },
+          data: {
+            status: B2BAnalysisStatus.COMPLETED,
+            processingToken: null,
+            provider: analysis.provider,
+            model: analysis.model,
+            progress: 100,
+            currentStep: 'Комнаты готовы к проверке',
+            warnings: analysis.warnings as Prisma.InputJsonValue,
+            inputTokens: analysis.usage?.inputTokens,
+            outputTokens: analysis.usage?.outputTokens,
+            errorMessage: null,
+            completedAt: new Date(),
+          },
+        });
+        if (completed.count !== 1) {
+          throw new Error('Floor-plan analysis lease was lost');
+        }
         await tx.b2BRoom.deleteMany({
           where: { b2bProjectId: run.b2bProjectId },
         });
@@ -128,28 +158,19 @@ export class FloorPlanAnalysisService {
           });
         }
 
-        await tx.floorPlanAnalysisRun.update({
-          where: { id: analysisRunId },
-          data: {
-            status: B2BAnalysisStatus.COMPLETED,
-            provider: analysis.provider,
-            model: analysis.model,
-            progress: 100,
-            currentStep: 'Комнаты готовы к проверке',
-            warnings: analysis.warnings as Prisma.InputJsonValue,
-            inputTokens: analysis.usage?.inputTokens,
-            outputTokens: analysis.usage?.outputTokens,
-            errorMessage: null,
-            completedAt: new Date(),
+        const projectCompleted = await tx.b2BProject.updateMany({
+          where: {
+            id: run.b2bProjectId,
+            status: B2BProjectStatus.ANALYZING,
           },
-        });
-        await tx.b2BProject.update({
-          where: { id: run.b2bProjectId },
           data: {
             status: B2BProjectStatus.REVIEW_REQUIRED,
             roomsRevision: { increment: 1 },
           },
         });
+        if (projectCompleted.count !== 1) {
+          throw new Error('Floor-plan analysis project state changed');
+        }
       });
     } catch {
       if (!attempt.isFinalAttempt) {
@@ -157,9 +178,11 @@ export class FloorPlanAnalysisService {
           where: {
             id: analysisRunId,
             status: B2BAnalysisStatus.PROCESSING,
+            processingToken,
           },
           data: {
             status: B2BAnalysisStatus.PENDING,
+            processingToken: null,
             progress: 0,
             currentStep: 'Повторяем анализ',
             errorMessage: null,
@@ -168,25 +191,31 @@ export class FloorPlanAnalysisService {
         });
         throw new Error('Floor-plan analysis failed');
       }
-      await Promise.all([
-        this.prisma.floorPlanAnalysisRun.update({
-          where: { id: analysisRunId },
+      await this.prisma.$transaction(async (tx) => {
+        const failed = await tx.floorPlanAnalysisRun.updateMany({
+          where: {
+            id: analysisRunId,
+            status: B2BAnalysisStatus.PROCESSING,
+            processingToken,
+          },
           data: {
             status: B2BAnalysisStatus.FAILED,
+            processingToken: null,
             progress: 100,
             currentStep: 'Анализ не выполнен',
             errorMessage: 'Floor-plan analysis failed',
             completedAt: new Date(),
           },
-        }),
-        this.prisma.b2BProject.updateMany({
+        });
+        if (failed.count !== 1) return;
+        await tx.b2BProject.updateMany({
           where: {
             id: run.b2bProjectId,
             status: B2BProjectStatus.ANALYZING,
           },
           data: { status: B2BProjectStatus.FAILED },
-        }),
-      ]);
+        });
+      });
       throw new Error('Floor-plan analysis failed');
     }
   }

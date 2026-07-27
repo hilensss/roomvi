@@ -3,9 +3,10 @@ import { GenerationQueueModule } from '../generation-queue/generation-queue.modu
 import { B2BProjectsController } from './b2b-projects.controller.js';
 import { B2BProjectsService } from './b2b-projects.service.js';
 import { ManagerGuard } from './guards/manager.guard.js';
+import { StorageModule } from '../storage/storage.module.js';
 
 @Module({
-  imports: [GenerationQueueModule],
+  imports: [GenerationQueueModule, StorageModule],
   controllers: [B2BProjectsController],
   providers: [B2BProjectsService, ManagerGuard],
 })

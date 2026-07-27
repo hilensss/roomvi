@@ -10,6 +10,7 @@ import {
   createB2BProject,
   confirmB2BRooms,
   getB2BVariantDownloadUrl,
+  getB2BFloorPlanUrl,
   getB2BProject,
   getB2BProjectCatalog,
   listB2BProjects,
@@ -19,6 +20,7 @@ import {
   startB2BFloorPlanAnalysis,
   startB2BProjectGeneration,
   uploadB2BRoomImage,
+  uploadB2BFloorPlan,
 } from './b2b-api';
 
 describe('b2b api', () => {
@@ -103,9 +105,31 @@ describe('b2b api', () => {
     expect(request.body.get('file')).toBe(file);
   });
 
+  it('uploads floor plans through the protected manager endpoint', async () => {
+    const file = new File(['plan'], 'floor-plan.jpg', {
+      type: 'image/jpeg',
+    });
+
+    await uploadB2BFloorPlan(file);
+
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/manager/b2b-projects/floor-plans/upload',
+      {
+        method: 'POST',
+        body: expect.any(FormData),
+      },
+    );
+  });
+
   it('builds a protected attachment endpoint for generated images', () => {
     expect(getB2BVariantDownloadUrl('project-1', 'variant-1')).toBe(
       'https://api.example.com/manager/b2b-projects/project-1/variants/variant-1/download',
+    );
+  });
+
+  it('builds a protected inline endpoint for a floor plan', () => {
+    expect(getB2BFloorPlanUrl('project-1')).toBe(
+      'https://api.example.com/manager/b2b-projects/project-1/floor-plan',
     );
   });
 

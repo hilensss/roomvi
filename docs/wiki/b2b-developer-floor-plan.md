@@ -38,24 +38,26 @@
 
 ## Поток данных
 
-1. `POST /manager/b2b-projects` создаёт проект с
+1. `POST /manager/b2b-projects/floor-plans/upload` сохраняет план в закрытом
+   storage-префиксе и возвращает только метаданные и `file.id`. Постоянный
+   публичный URL оригинала не возвращается.
+2. `POST /manager/b2b-projects` создаёт проект с
    `type=DEVELOPER_FLOOR_PLAN` и `sourcePlanFileId`. API принимает только
-   загруженный текущим менеджером raster-файл и само получает его URL и
-   storage key.
-2. `POST /manager/b2b-projects/:id/analyze-floor-plan` атомарно переводит
+   загруженный текущим менеджером raster-файл нужного назначения.
+3. `POST /manager/b2b-projects/:id/analyze-floor-plan` атомарно переводит
    проект в `ANALYZING`, создаёт `FloorPlanAnalysisRun` и ставит BullMQ job.
-3. Worker читает изображение из S3-совместимого storage по сохранённому key,
+4. Worker читает изображение из S3-совместимого storage по сохранённому key,
    проверяет MIME и размер во время чтения, применяет EXIF rotation и уменьшает
    большую сторону до 2400 px. Произвольные внешние URL не загружаются.
-4. `FloorPlanAnalyzerService` вызывает общий `ReasoningAiService` со строгой
+5. `FloorPlanAnalyzerService` вызывает общий `ReasoningAiService` со строгой
    JSON Schema.
-5. Ответ отдельно валидируется на стороне приложения. Некорректные полигоны,
+6. Ответ отдельно валидируется на стороне приложения. Некорректные полигоны,
    openings и дубликаты не попадают в рабочий набор.
-6. Комнаты и openings сохраняются одной транзакцией. Проект переходит в
+7. Комнаты и openings сохраняются одной транзакцией. Проект переходит в
    `REVIEW_REQUIRED`, а `roomsRevision` увеличивается.
-7. Менеджер отправляет исправленный полный набор через
+8. Менеджер отправляет исправленный полный набор через
    `PUT /manager/b2b-projects/:id/rooms`.
-8. `POST /manager/b2b-projects/:id/rooms/confirm` принимает текущий
+9. `POST /manager/b2b-projects/:id/rooms/confirm` принимает текущий
    `roomsRevision`, атомарно блокирует эту ревизию, проверяет включённые
    комнаты и переводит проект в `READY_TO_GENERATE`.
 
@@ -101,15 +103,23 @@ REASONING_AI_TIMEOUT_MS=60000
 
 Повторный анализ полностью заменяет предыдущий распознанный набор комнат.
 Частичный unique index разрешает только один `PENDING`/`PROCESSING` run на
-проект; до исчерпания queue retry run остаётся активным.
+проект. Каждый запуск worker получает lease token: восстановленный stalled
+job заменяет lease, а потерявший lease процесс больше не может сохранить
+комнаты или финальный статус. Терминальный `FAILED` run повторно не
+захватывается.
 Сохранение из устаревшей вкладки отклоняется при несовпадении
-`roomsRevision`.
+`roomsRevision`; клиент после `409` принудительно получает проект с сервера,
+минуя stale cache.
 
 ## API
 
+- `POST /manager/b2b-projects/floor-plans/upload`
+- `GET /manager/b2b-projects/:id/floor-plan`
 - `POST /manager/b2b-projects/:id/analyze-floor-plan`
 - `GET /manager/b2b-projects/:id/analysis`
 - `PUT /manager/b2b-projects/:id/rooms`
 - `POST /manager/b2b-projects/:id/rooms/confirm`
 
-Все endpoints защищены `JwtAuthGuard` и `ManagerGuard`.
+Все endpoints защищены `JwtAuthGuard` и `ManagerGuard`. Просмотр исходного
+плана идёт через авторизованный inline endpoint; постоянный storage URL в
+проекте не хранится.

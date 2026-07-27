@@ -43,6 +43,23 @@ export function uploadB2BRoomImage(file: File) {
   });
 }
 
+export function uploadB2BFloorPlan(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return apiFetch<{
+    file: {
+      id: string;
+      originalName: string;
+      mimeType: string;
+      sizeBytes: number;
+    };
+  }>('/manager/b2b-projects/floor-plans/upload', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 export function getB2BProject(projectId: string) {
   return apiFetch<B2BProject>(`/manager/b2b-projects/${projectId}`);
 }
@@ -115,5 +132,11 @@ export function getB2BVariantDownloadUrl(
 ) {
   return buildApiUrl(
     `/manager/b2b-projects/${projectId}/variants/${variantId}/download`,
+  );
+}
+
+export function getB2BFloorPlanUrl(projectId: string) {
+  return buildApiUrl(
+    `/manager/b2b-projects/${projectId}/floor-plan`,
   );
 }

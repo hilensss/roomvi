@@ -65,10 +65,16 @@ test('floor-plan analysis persists reviewable rooms and completes the run atomic
       create: async (args) => calls.push(['rooms.create', args]),
     },
     floorPlanAnalysisRun: {
-      update: async (args) => calls.push(['run.update', args]),
+      updateMany: async (args) => {
+        calls.push(['run.update', args]);
+        return { count: 1 };
+      },
     },
     b2BProject: {
-      update: async (args) => calls.push(['project.update', args]),
+      updateMany: async (args) => {
+        calls.push(['project.update', args]);
+        return { count: 1 };
+      },
     },
   };
   const prisma = {
@@ -165,7 +171,10 @@ test('a non-final failure returns the run to pending for the same queue retry', 
   );
 
   await assert.rejects(
-    service.process('analysis-1', { isRetry: false, isFinalAttempt: false }),
+    service.process('analysis-1', {
+      isRecovery: false,
+      isFinalAttempt: false,
+    }),
     /analysis failed/i,
   );
 
@@ -205,17 +214,89 @@ test('floor-plan analysis replay is a no-op after completion', async () => {
   await service.process('analysis-1');
 });
 
+test('a terminal failed run cannot be replayed over a newer analysis', async () => {
+  const service = new FloorPlanAnalysisService(
+    {
+      floorPlanAnalysisRun: {
+        findUnique: async () =>
+          runRecord({ status: B2BAnalysisStatus.FAILED }),
+        updateMany: async () => ({ count: 0 }),
+      },
+    },
+    {
+      loadNormalizedImage: async () =>
+        assert.fail('failed run cannot load its plan again'),
+    },
+    {
+      analyze: async () =>
+        assert.fail('failed run cannot call reasoning AI again'),
+    },
+  );
+
+  await assert.rejects(
+    service.process('analysis-1', {
+      isRecovery: true,
+      isFinalAttempt: true,
+    }),
+    /not claimable/i,
+  );
+});
+
+test('a stalled recovery claims processing with a new lease token', async () => {
+  let claim;
+  const service = new FloorPlanAnalysisService(
+    {
+      floorPlanAnalysisRun: {
+        findUnique: async () =>
+          runRecord({ status: B2BAnalysisStatus.PROCESSING }),
+        updateMany: async (args) => {
+          claim = args;
+          return { count: 0 };
+        },
+      },
+    },
+    {},
+    {},
+  );
+
+  await assert.rejects(
+    service.process('analysis-1', {
+      isRecovery: true,
+      isFinalAttempt: true,
+    }),
+    /not claimable/i,
+  );
+
+  assert.deepEqual(claim.where.status.in, [
+    B2BAnalysisStatus.PENDING,
+    B2BAnalysisStatus.PROCESSING,
+  ]);
+  assert.equal(typeof claim.data.processingToken, 'string');
+  assert.ok(claim.data.processingToken.length > 10);
+});
+
 test('floor-plan analysis records a safe terminal error on failure', async () => {
   const calls = [];
   const prisma = {
     floorPlanAnalysisRun: {
       findUnique: async () => runRecord(),
       updateMany: async () => ({ count: 1 }),
-      update: async (args) => calls.push(['run.failed', args]),
     },
     b2BProject: {
       updateMany: async (args) => calls.push(['project.failed', args]),
     },
+    $transaction: async (callback) =>
+      callback({
+        floorPlanAnalysisRun: {
+          updateMany: async (args) => {
+            calls.push(['run.failed', args]);
+            return { count: 1 };
+          },
+        },
+        b2BProject: {
+          updateMany: async (args) => calls.push(['project.failed', args]),
+        },
+      }),
   };
   const service = new FloorPlanAnalysisService(
     prisma,

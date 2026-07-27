@@ -34,6 +34,8 @@ import {
 } from './dto/replace-b2b-rooms.dto.js';
 import { UpdateB2BProjectDto } from './dto/update-b2b-project.dto.js';
 import { FILE_PURPOSES } from '../files/constants/upload.constants.js';
+import { createSafeFileName } from '../files/utils/file-name.util.js';
+import { StorageService } from '../storage/storage.service.js';
 
 const mutableProjectStatuses = [
   B2BProjectStatus.DRAFT,
@@ -42,6 +44,7 @@ const mutableProjectStatuses = [
 ] as const;
 const DOWNLOAD_MAX_BYTES = 20 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT_MS = 10_000;
+const FLOOR_PLAN_MAX_BYTES = 10 * 1024 * 1024;
 
 const projectDetailInclude = {
   supplier: true,
@@ -82,6 +85,7 @@ export class B2BProjectsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly generationQueueService: GenerationQueueService,
+    private readonly storageService: StorageService,
   ) {}
 
   async list(query: ListB2BProjectsQueryDto) {
@@ -138,7 +142,7 @@ export class B2BProjectsService {
   async create(dto: CreateB2BProjectDto, createdById: string) {
     const type = dto.type ?? B2BProjectType.FURNITURE_LINE;
     let sourcePlan:
-      | { id: string; url: string; mimeType: string }
+      | { id: string; mimeType: string }
       | undefined;
     if (type === B2BProjectType.FURNITURE_LINE) {
       if (!dto.supplierId || !dto.roomType || dto.sourcePlanFileId) {
@@ -179,15 +183,79 @@ export class B2BProjectsService {
         managerComment: dto.managerComment?.trim() || null,
         sourceImageUrl:
           type === B2BProjectType.DEVELOPER_FLOOR_PLAN
-            ? sourcePlan!.url
+            ? null
             : dto.sourceImageUrl ?? null,
         sourcePlanFileId: sourcePlan?.id ?? null,
-        sourcePlanPreviewUrl: sourcePlan?.url ?? null,
+        sourcePlanPreviewUrl: null,
         defaultCeilingHeightCm: dto.defaultCeilingHeightCm ?? 270,
         createdById,
       },
       include: projectDetailInclude,
     });
+  }
+
+  async uploadFloorPlan(file: Express.Multer.File, userId: string) {
+    const fileName = createSafeFileName(file.originalname);
+    const storageKey = `uploads/private/b2b-floor-plans/${fileName}`;
+    const uploaded = await this.storageService.uploadFile({
+      buffer: file.buffer,
+      key: storageKey,
+      mimeType: file.mimetype,
+    });
+    const storedFile = await this.prisma.file.create({
+      data: {
+        ownerType: FileOwnerType.USER,
+        userId,
+        originalName: file.originalname,
+        fileName,
+        mimeType: file.mimetype,
+        sizeBytes: file.size,
+        storageKey: uploaded.key,
+        url: `private:${uploaded.key}`,
+        purpose: FILE_PURPOSES.B2B_FLOOR_PLAN,
+      },
+      select: {
+        id: true,
+        originalName: true,
+        mimeType: true,
+        sizeBytes: true,
+      },
+    });
+    return { file: storedFile };
+  }
+
+  async downloadFloorPlan(id: string) {
+    const project = await this.prisma.b2BProject.findFirst({
+      where: { id, type: B2BProjectType.DEVELOPER_FLOOR_PLAN },
+      select: {
+        sourcePlanFile: {
+          select: {
+            storageKey: true,
+            mimeType: true,
+            sizeBytes: true,
+          },
+        },
+      },
+    });
+    if (!project) throw new NotFoundException('B2B project not found');
+    if (!project.sourcePlanFile) {
+      throw new NotFoundException('Floor-plan file not found');
+    }
+    if (project.sourcePlanFile.sizeBytes > FLOOR_PLAN_MAX_BYTES) {
+      throw new BadRequestException('Floor-plan image is too large');
+    }
+    const file = await this.storageService.downloadFile(
+      project.sourcePlanFile.storageKey,
+      FLOOR_PLAN_MAX_BYTES,
+      DOWNLOAD_TIMEOUT_MS,
+    );
+    const contentType =
+      file.contentType ?? project.sourcePlanFile.mimeType;
+    return {
+      ...file,
+      contentType,
+      fileName: `floor-plan.${this.getImageExtension(contentType)}`,
+    };
   }
 
   async getById(id: string) {
@@ -209,7 +277,7 @@ export class B2BProjectsService {
 
   async startFloorPlanAnalysis(id: string) {
     const project = await this.requireDeveloperProject(id);
-    if (!project.sourceImageUrl) {
+    if (!project.sourcePlanFileId) {
       throw new BadRequestException('Floor-plan image is required');
     }
     if (project.status === B2BProjectStatus.ANALYZING) {
@@ -839,10 +907,10 @@ export class B2BProjectsService {
         id: fileId,
         ownerType: FileOwnerType.USER,
         userId,
-        purpose: FILE_PURPOSES.ROOM_SOURCE_IMAGE,
+        purpose: FILE_PURPOSES.B2B_FLOOR_PLAN,
         mimeType: { in: ['image/jpeg', 'image/png', 'image/webp'] },
       },
-      select: { id: true, url: true, mimeType: true },
+      select: { id: true, mimeType: true },
     });
     if (!file) {
       throw new BadRequestException(

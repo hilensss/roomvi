@@ -25,6 +25,8 @@ vi.mock('../api/b2b-queries', () => ({
 }));
 vi.mock('../api/b2b-api', () => ({
   getB2BProject: mocks.getProject,
+  getB2BFloorPlanUrl: (projectId: string) =>
+    `https://api.example.com/manager/b2b-projects/${projectId}/floor-plan`,
 }));
 
 import { FloorPlanRoomReview } from './floor-plan-room-review';
@@ -40,7 +42,8 @@ const project = {
   roomType: null,
   style: 'SCANDI',
   managerComment: null,
-  sourceImageUrl: 'https://cdn.example.com/floor-plan.jpg',
+  sourceImageUrl: null,
+  sourcePlanFileId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   defaultCeilingHeightCm: 270,
   roomsRevision: 1,
   products: [],
@@ -169,15 +172,56 @@ it('reloads the latest room draft after a revision conflict', async () => {
     rooms: [{ ...project.rooms[0], name: 'Актуальная гостиная' }],
   });
   const user = userEvent.setup();
-  renderWithQueryClient(<FloorPlanRoomReview project={project} />);
+  const { queryClient } = renderWithQueryClient(
+    <FloorPlanRoomReview project={project} />,
+  );
+  queryClient.setDefaultOptions({
+    queries: { staleTime: 30_000, retry: false },
+  });
+  queryClient.setQueryData(
+    ['manager', 'b2b-projects', 'project-1'],
+    project,
+  );
 
   await user.type(screen.getByLabelText('Название'), ' локально');
   await user.click(screen.getByRole('button', { name: 'Сохранить комнаты' }));
 
   expect(await screen.findByDisplayValue('Актуальная гостиная')).toBeInTheDocument();
+  expect(mocks.getProject).toHaveBeenCalledWith('project-1');
   expect(
     screen.getByText(
       'Комнаты изменились в другой вкладке. Загружена актуальная версия.',
     ),
   ).toBeInTheDocument();
+});
+
+it('reloads the latest room draft after a confirm conflict', async () => {
+  mocks.confirmRooms.mockRejectedValue(
+    new ApiError('Rooms were changed by another manager', 409),
+  );
+  mocks.getProject.mockResolvedValue({
+    ...project,
+    roomsRevision: 2,
+    rooms: [
+      {
+        ...project.rooms[0],
+        name: 'Актуальная гостиная',
+        roomType: 'LIVING_ROOM',
+      },
+    ],
+  });
+  const user = userEvent.setup();
+  renderWithQueryClient(<FloorPlanRoomReview project={{
+    ...project,
+    rooms: [{ ...project.rooms[0], roomType: 'LIVING_ROOM' }],
+  }} />);
+
+  await user.click(
+    screen.getByRole('button', { name: 'Подтвердить комнаты' }),
+  );
+
+  expect(
+    await screen.findByDisplayValue('Актуальная гостиная'),
+  ).toBeInTheDocument();
+  expect(mocks.getProject).toHaveBeenCalledWith('project-1');
 });

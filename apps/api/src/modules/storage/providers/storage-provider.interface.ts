@@ -9,6 +9,17 @@ export type UploadedFileResult = {
   url: string;
 };
 
+export type DownloadedFileResult = {
+  buffer: Buffer;
+  contentType?: string;
+  contentLength?: number;
+};
+
 export interface StorageProvider {
   uploadFile(input: UploadFileInput): Promise<UploadedFileResult>;
+  downloadFile(
+    key: string,
+    maxBytes: number,
+    timeoutMs?: number,
+  ): Promise<DownloadedFileResult>;
 }

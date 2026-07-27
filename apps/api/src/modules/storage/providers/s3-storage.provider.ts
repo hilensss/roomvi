@@ -4,7 +4,11 @@ import {
   UploadedFileResult,
   UploadFileInput,
 } from './storage-provider.interface.js';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -45,6 +49,46 @@ export class S3StorageProvider implements StorageProvider {
       key: input.key,
       url: `${this.publicBaseUrl.replace(/\/$/, '')}/${input.key}`,
     };
+  }
+
+  async downloadFile(
+    key: string,
+    maxBytes: number,
+    timeoutMs = 10_000,
+  ) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await this.client.send(
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+        { abortSignal: controller.signal },
+      );
+      if (
+        response.ContentLength !== undefined &&
+        response.ContentLength > maxBytes
+      ) {
+        throw new Error('Stored object exceeds the download limit');
+      }
+      if (!response.Body) throw new Error('Stored object has no body');
+
+      const chunks: Buffer[] = [];
+      let receivedBytes = 0;
+      for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+        const buffer = Buffer.from(chunk);
+        receivedBytes += buffer.length;
+        if (receivedBytes > maxBytes) {
+          throw new Error('Stored object exceeds the download limit');
+        }
+        chunks.push(buffer);
+      }
+      return {
+        buffer: Buffer.concat(chunks),
+        contentType: response.ContentType,
+        contentLength: receivedBytes,
+      };
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   private getRequiredEnv(key: string): string {

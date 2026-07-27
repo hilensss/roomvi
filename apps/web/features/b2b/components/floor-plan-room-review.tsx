@@ -10,7 +10,10 @@ import {
   useConfirmB2BRoomsMutation,
   useReplaceB2BRoomsMutation,
 } from '../api/b2b-queries';
-import { getB2BProject } from '../api/b2b-api';
+import {
+  getB2BFloorPlanUrl,
+  getB2BProject,
+} from '../api/b2b-api';
 import type {
   B2BRoom,
   DeveloperB2BProject,
@@ -199,27 +202,8 @@ export function FloorPlanRoomReview({
       setMessage('Комнаты сохранены.');
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409) {
-        try {
-          const refreshed = await queryClient.fetchQuery({
-            queryKey: b2bQueryKeys.detail(project.id),
-            queryFn: () => getB2BProject(project.id),
-          });
-          if (refreshed.type === 'DEVELOPER_FLOOR_PLAN') {
-            const refreshedRooms = refreshed.rooms.map(toEditableRoom);
-            setRoomsState(refreshedRooms);
-            setSelectedRoomId(refreshedRooms[0]?.id ?? '');
-            setDirty(false);
-            setMessage(
-              'Комнаты изменились в другой вкладке. Загружена актуальная версия.',
-            );
-            return;
-          }
-        } catch {
-          setMessage(
-            'Комнаты изменились в другой вкладке. Обновите страницу и повторите изменения.',
-          );
-          return;
-        }
+        await recoverFromConflict();
+        return;
       }
       setMessage(
         caught instanceof Error
@@ -238,10 +222,38 @@ export function FloorPlanRoomReview({
       });
       setMessage('Комнаты подтверждены и готовы к генерации.');
     } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 409) {
+        await recoverFromConflict();
+        return;
+      }
       setMessage(
         caught instanceof Error
           ? caught.message
           : 'Не удалось подтвердить комнаты.',
+      );
+    }
+  }
+
+  async function recoverFromConflict() {
+    try {
+      const refreshed = await getB2BProject(project.id);
+      queryClient.setQueryData(
+        b2bQueryKeys.detail(project.id),
+        refreshed,
+      );
+      if (refreshed.type !== 'DEVELOPER_FLOOR_PLAN') {
+        throw new Error('Unexpected project type');
+      }
+      const refreshedRooms = refreshed.rooms.map(toEditableRoom);
+      setRoomsState(refreshedRooms);
+      setSelectedRoomId(refreshedRooms[0]?.id ?? '');
+      setDirty(false);
+      setMessage(
+        'Комнаты изменились в другой вкладке. Загружена актуальная версия.',
+      );
+    } catch {
+      setMessage(
+        'Комнаты изменились в другой вкладке. Обновите страницу и повторите изменения.',
       );
     }
   }
@@ -289,11 +301,11 @@ export function FloorPlanRoomReview({
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.7fr)]">
         <div className="relative overflow-hidden rounded-card border border-line/50 bg-white">
-          {project.sourceImageUrl ? (
+          {project.sourcePlanFileId ? (
             // The SVG uses the same normalized 0..1 page space as the API.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={project.sourceImageUrl}
+              src={getB2BFloorPlanUrl(project.id)}
               alt="Планировка квартиры"
               className="block h-auto w-full"
             />
