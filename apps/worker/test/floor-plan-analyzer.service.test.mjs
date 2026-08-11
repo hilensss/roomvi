@@ -79,6 +79,28 @@ test('floor-plan analyzer keeps usable room geometry and valid wall openings', a
   });
 });
 
+test('floor-plan analyzer requests non-overlapping wall-following room interiors', async () => {
+  let capturedRequest;
+  const analyzer = new FloorPlanAnalyzerService({
+    generateStructured: async (request) => {
+      capturedRequest = request;
+      return {
+        data: { rooms: [proposal()] },
+        provider: 'openai',
+        model: 'gpt-5.6-luna',
+      };
+    },
+  });
+
+  await analyzer.analyze(attachment);
+
+  const instructions = `${capturedRequest.systemPrompt} ${capturedRequest.userPrompt}`;
+  assert.match(instructions, /full raster image/i);
+  assert.match(instructions, /not bounding boxes/i);
+  assert.match(instructions, /must not overlap/i);
+  assert.match(instructions, /inner wall corners/i);
+});
+
 test('floor-plan analyzer clears an uncertain or unsupported room type for review', async () => {
   const result = await analyzerFor({
     rooms: [

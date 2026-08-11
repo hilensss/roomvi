@@ -2,11 +2,13 @@ node_modules
 dist
 .turbo
 .env
+.env.production
 .DS_Store
 coverage
 *.log
 packages/database/generated
 
 docs
+AGENTS.md
 
 graphify-out

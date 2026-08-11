@@ -23,6 +23,7 @@ const roomTypes: { value: RoomType; label: string }[] = [
   { value: 'KITCHEN', label: 'Кухня' },
   { value: 'OFFICE', label: 'Кабинет' },
   { value: 'KIDS_ROOM', label: 'Детская' },
+  { value: 'HALLWAY', label: 'Прихожая' },
   { value: 'BATHROOM', label: 'Ванная' },
   { value: 'STUDIO', label: 'Студия' },
 ];
@@ -34,10 +35,19 @@ const categories: { value: ProductCategory; label: string }[] = [
   { value: 'TABLE', label: 'Столы' },
   { value: 'COFFEE_TABLE', label: 'Журнальные столики' },
   { value: 'BED', label: 'Кровати' },
+  { value: 'TV_STAND', label: 'Тумбы под ТВ' },
   { value: 'WARDROBE', label: 'Хранение' },
-  { value: 'LIGHTING', label: 'Свет' },
+  { value: 'DRESSER', label: 'Комоды' },
+  { value: 'SHELF', label: 'Стеллажи' },
+  { value: 'DESK', label: 'Письменные столы' },
+  { value: 'LAMP', label: 'Свет' },
   { value: 'RUG', label: 'Ковры' },
   { value: 'DECOR', label: 'Декор' },
+  { value: 'MATTRESS', label: 'Матрасы' },
+  { value: 'MIRROR', label: 'Зеркала' },
+  { value: 'BENCH', label: 'Банкетки' },
+  { value: 'SHOE_CABINET', label: 'Обувницы' },
+  { value: 'HANGER', label: 'Вешалки' },
 ];
 
 const styles: { value: InteriorStyle; label: string }[] = [

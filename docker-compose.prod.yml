@@ -1,0 +1,120 @@
+name: roomvi
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: roomvi
+      POSTGRES_USER: roomvi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U roomvi -d roomvi']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://roomvi:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/roomvi?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
+  api:
+    build:
+      context: .
+      target: api
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${ROOMVI_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      API_CORS_ORIGIN: https://roomvi.ru
+      COOKIE_PATH: /release
+      DATABASE_URL: postgresql://roomvi:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/roomvi?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      target: worker
+    restart: unless-stopped
+    init: true
+    env_file:
+      - ${ROOMVI_ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://roomvi:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/roomvi?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      target: web
+      args:
+        NEXT_PUBLIC_API_URL: /release/api
+        NEXT_PUBLIC_BASE_PATH: /release
+    restart: unless-stopped
+    init: true
+    depends_on:
+      api:
+        condition: service_started
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      RELEASE_AUTH_USER: ${RELEASE_AUTH_USER:?Set RELEASE_AUTH_USER in .env.production}
+      RELEASE_AUTH_PASSWORD_HASH: ${RELEASE_AUTH_PASSWORD_HASH:?Set RELEASE_AUTH_PASSWORD_HASH in .env.production}
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_started
+      web:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

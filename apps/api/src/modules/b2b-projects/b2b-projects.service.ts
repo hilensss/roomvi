@@ -72,6 +72,20 @@ const projectDetailInclude = {
       openings: {
         orderBy: { createdAt: 'asc' as const },
       },
+      roomProject: {
+        include: {
+          generationJobs: {
+            orderBy: { createdAt: 'desc' as const },
+            take: 1,
+            include: {
+              designVariants: {
+                orderBy: { createdAt: 'asc' as const },
+                include: { products: { include: { product: true } } },
+              },
+            },
+          },
+        },
+      },
     },
   },
   analysisRuns: {
@@ -653,11 +667,17 @@ export class B2BProjectsService {
       const claimed = await tx.b2BProject.updateMany({
         where: {
           id,
-          type: B2BProjectType.FURNITURE_LINE,
+          type: {
+            in: [
+              B2BProjectType.FURNITURE_LINE,
+              B2BProjectType.DEVELOPER_FLOOR_PLAN,
+            ],
+          },
           status: {
             in: [
               B2BProjectStatus.READY_TO_GENERATE,
               B2BProjectStatus.FAILED,
+              B2BProjectStatus.PARTIALLY_COMPLETED,
             ],
           },
         },
@@ -674,9 +694,92 @@ export class B2BProjectsService {
             orderBy: { sortOrder: 'asc' },
             include: { product: true },
           },
+          rooms: {
+            orderBy: { sortOrder: 'asc' },
+            include: { openings: true },
+          },
         },
       });
       if (!project) throw new NotFoundException('B2B project not found');
+
+      if (project.type === B2BProjectType.DEVELOPER_FLOOR_PLAN) {
+        const rooms = project.rooms.filter(
+          (room) =>
+            room.isIncluded &&
+            (room.status === B2BRoomStatus.READY_TO_GENERATE ||
+              room.status === B2BRoomStatus.FAILED),
+        );
+        if (rooms.length === 0) {
+          throw new BadRequestException(
+            'Developer generation requires at least one confirmed room',
+          );
+        }
+
+        const jobs = [];
+        for (const room of rooms) {
+          if (!room.roomType || !room.widthCm || !room.depthCm) {
+            throw new BadRequestException(
+              `Room "${room.name}" requires type, width, and length`,
+            );
+          }
+          const roomProject = room.roomProjectId
+            ? await tx.roomProject.update({
+                where: { id: room.roomProjectId },
+                data: {
+                  title: `${project.name} · ${room.name}`,
+                  roomType: room.roomType,
+                  style: room.styleOverride ?? project.style,
+                  widthCm: room.widthCm,
+                  heightCm:
+                    room.ceilingHeightCm ?? project.defaultCeilingHeightCm,
+                  depthCm: room.depthCm,
+                  sourceImageUrl: null,
+                  status: RoomProjectStatus.READY_TO_GENERATE,
+                },
+              })
+            : await tx.roomProject.create({
+                data: {
+                  ownerType: GenerationOwnerType.USER,
+                  userId: managerId,
+                  title: `${project.name} · ${room.name}`,
+                  roomType: room.roomType,
+                  style: room.styleOverride ?? project.style,
+                  widthCm: room.widthCm,
+                  heightCm:
+                    room.ceilingHeightCm ?? project.defaultCeilingHeightCm,
+                  depthCm: room.depthCm,
+                  status: RoomProjectStatus.READY_TO_GENERATE,
+                },
+              });
+          const job = await tx.generationJob.create({
+            data: {
+              ownerType: GenerationOwnerType.USER,
+              userId: managerId,
+              roomProjectId: roomProject.id,
+              b2bRoomId: room.id,
+              provider: this.getDefaultGenerationProvider(),
+              status: GenerationJobStatus.PENDING,
+              scenario: GenerationScenario.B2B_DEVELOPER_ROOM,
+              requestedVariants: 1,
+              inputParams: {
+                b2bProjectId: project.id,
+                b2bRoomId: room.id,
+              },
+            },
+          });
+          await tx.b2BRoom.update({
+            where: { id: room.id },
+            data: {
+              roomProjectId: roomProject.id,
+              status: B2BRoomStatus.GENERATING,
+            },
+          });
+          jobs.push(job);
+        }
+
+        return { project: { id: project.id }, jobs };
+      }
+
       if (
         project.type !== B2BProjectType.FURNITURE_LINE ||
         !project.supplierId ||
@@ -743,21 +846,43 @@ export class B2BProjectsService {
       return { project: roomProject, job };
     });
 
+    const developerJobs = 'jobs' in result ? (result.jobs ?? []) : null;
+    const jobIds = developerJobs
+      ? developerJobs.map((job) => job.id)
+      : result.job
+        ? [result.job.id]
+        : [];
     try {
-      await this.generationQueueService.enqueueGeneration(result.job.id);
+      await Promise.all(
+        jobIds.map((jobId) =>
+          this.generationQueueService.enqueueGeneration(jobId),
+        ),
+      );
     } catch (error) {
       await this.prisma.$transaction([
         this.prisma.b2BProject.update({
           where: { id },
           data: { status: B2BProjectStatus.FAILED },
         }),
-        this.prisma.generationJob.update({
-          where: { id: result.job.id },
+        this.prisma.generationJob.updateMany({
+          where: { id: { in: jobIds } },
           data: {
             status: GenerationJobStatus.FAILED,
             errorMessage: 'Failed to enqueue generation',
           },
         }),
+        ...(developerJobs
+          ? [
+              this.prisma.b2BRoom.updateMany({
+                where: {
+                  generationJobs: {
+                    some: { id: { in: jobIds } },
+                  },
+                },
+                data: { status: B2BRoomStatus.FAILED },
+              }),
+            ]
+          : []),
       ]);
       throw error;
     }
@@ -769,7 +894,12 @@ export class B2BProjectsService {
     const variant = await this.prisma.designVariant.findFirst({
       where: {
         id: variantId,
-        roomProject: { b2bProject: { id: projectId } },
+        roomProject: {
+          OR: [
+            { b2bProject: { id: projectId } },
+            { b2bRoom: { b2bProjectId: projectId } },
+          ],
+        },
       },
       select: { id: true, imageUrl: true },
     });

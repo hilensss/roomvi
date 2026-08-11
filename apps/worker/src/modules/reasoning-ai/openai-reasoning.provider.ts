@@ -2,6 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   REASONING_AI_FETCH,
+  ReasoningAiProviderError,
   type ReasoningAiProvider,
 } from './reasoning-ai-provider.interface.js';
 import type {
@@ -20,21 +21,17 @@ type OpenAiResponse = {
   output?: Array<{
     content?: Array<{ type?: string; text?: string }>;
   }>;
+  choices?: Array<{
+    message?: { content?: string };
+  }>;
   usage?: {
     input_tokens?: number;
     output_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
   };
 };
 
-export class ReasoningAiProviderError extends Error {
-  constructor(
-    message: string,
-    readonly retryable = false,
-  ) {
-    super(message);
-    this.name = 'ReasoningAiProviderError';
-  }
-}
 @Injectable()
 export class OpenAiReasoningProvider implements ReasoningAiProvider {
   private readonly fetchTransport: FetchTransport;
@@ -53,33 +50,55 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
   async generateStructured(
     request: StructuredReasoningRequest,
   ): Promise<StructuredReasoningResult> {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    const apiKey =
+      this.configService.get<string>('REASONING_AI_API_KEY') ??
+      this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
       throw new ReasoningAiProviderError(
-        'OPENAI_API_KEY is not configured',
+        'REASONING_AI_API_KEY or OPENAI_API_KEY is not configured',
       );
     }
 
     const model =
+      request.model ??
       this.configService.get<string>('REASONING_AI_MODEL') ??
       'gpt-5.6-luna';
+    const baseUrl = (
+      this.configService.get<string>('REASONING_AI_BASE_URL') ??
+      'https://api.openai.com/v1'
+    ).replace(/\/+$/, '');
     const effort =
+      request.reasoningEffort ??
       this.configService.get<string>('REASONING_AI_REASONING_EFFORT') ??
       'low';
-    const timeoutMs = Number(
-      this.configService.get<string>('REASONING_AI_TIMEOUT_MS') ?? 60_000,
-    );
-    const body = this.buildRequestBody(request, model, effort);
+    const timeoutMs =
+      request.timeoutMs ??
+      Number(
+        this.configService.get<string>('REASONING_AI_TIMEOUT_MS') ?? 60_000,
+      );
+    const apiMode = request.apiMode ?? 'responses';
+    const body =
+      apiMode === 'chat_completions'
+        ? this.buildChatCompletionsRequestBody(request, model)
+        : this.buildResponsesRequestBody(request, model, effort);
+    const endpointPath =
+      apiMode === 'chat_completions' ? '/chat/completions' : '/responses';
 
     let lastError: unknown;
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
+    const maxAttempts = Math.max(1, Math.min(request.maxAttempts ?? 2, 2));
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const response = await this.send(apiKey, body, timeoutMs);
-        return this.parseResponse(response, model);
+        const response = await this.send(
+          apiKey,
+          `${baseUrl}${endpointPath}`,
+          body,
+          timeoutMs,
+        );
+        return this.parseResponse(response, model, apiMode);
       } catch (error) {
         lastError = error;
         if (
-          attempt === 2 ||
+          attempt === maxAttempts ||
           !(error instanceof ReasoningAiProviderError) ||
           !error.retryable
         ) {
@@ -91,7 +110,7 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
     throw lastError;
   }
 
-  private buildRequestBody(
+  private buildResponsesRequestBody(
     request: StructuredReasoningRequest,
     model: string,
     effort: string,
@@ -99,7 +118,7 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
     return {
       model,
       store: false,
-      max_output_tokens: 12_000,
+      max_output_tokens: request.maxOutputTokens ?? 12_000,
       reasoning: { effort },
       input: [
         {
@@ -128,6 +147,33 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
     };
   }
 
+  private buildChatCompletionsRequestBody(
+    request: StructuredReasoningRequest,
+    model: string,
+  ) {
+    if (request.attachments.length > 0) {
+      throw new ReasoningAiProviderError(
+        'Chat Completions reasoning transport does not support attachments',
+      );
+    }
+    return {
+      model,
+      max_tokens: request.maxOutputTokens ?? 12_000,
+      messages: [
+        { role: 'system', content: request.systemPrompt },
+        { role: 'user', content: request.userPrompt },
+      ],
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: this.safeSchemaName(request.taskName),
+          strict: true,
+          schema: request.jsonSchema,
+        },
+      },
+    };
+  }
+
   private toInputAttachment(attachment: ReasoningAttachment) {
     if (!attachment.mimeType.startsWith('image/')) {
       throw new ReasoningAiProviderError(
@@ -143,6 +189,7 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
 
   private async send(
     apiKey: string,
+    endpoint: string,
     body: unknown,
     timeoutMs: number,
   ): Promise<OpenAiResponse> {
@@ -150,7 +197,7 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await this.fetchTransport(
-        'https://api.openai.com/v1/responses',
+        endpoint,
         {
           method: 'POST',
           headers: {
@@ -163,9 +210,13 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
       );
 
       if (!response.ok) {
+        const code = await this.readErrorCode(response);
         throw new ReasoningAiProviderError(
-          `OpenAI Responses request failed with status ${response.status}`,
-          response.status === 429 || response.status >= 500,
+          this.httpErrorMessage(response.status, code),
+          response.status >= 500 ||
+            (response.status === 429 && code !== 'insufficient_quota'),
+          response.status,
+          code,
         );
       }
       try {
@@ -190,15 +241,43 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
     }
   }
 
+  private async readErrorCode(response: Response) {
+    try {
+      const body = (await response.json()) as {
+        error?: { code?: unknown; type?: unknown };
+      };
+      const code = body?.error?.code ?? body?.error?.type;
+      return typeof code === 'string' ? code : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private httpErrorMessage(status: number, code?: string) {
+    if (code === 'insufficient_quota') {
+      return 'OpenAI API quota is exhausted. Configure API billing or add credits.';
+    }
+    if (status === 401) return 'OpenAI API key was rejected.';
+    if (status === 403) return 'OpenAI API access was denied.';
+    if (status === 404) {
+      return 'OpenAI model is unavailable for this API project.';
+    }
+    if (status === 429) return 'OpenAI API rate limit was exceeded.';
+    return `OpenAI Responses request failed with status ${status}`;
+  }
+
   private parseResponse(
     response: OpenAiResponse,
     model: string,
+    apiMode: 'responses' | 'chat_completions',
   ): StructuredReasoningResult {
     const outputText =
-      response.output_text ??
-      response.output
-        ?.flatMap((item) => item.content ?? [])
-        .find((content) => content.type === 'output_text')?.text;
+      apiMode === 'chat_completions'
+        ? response.choices?.[0]?.message?.content
+        : response.output_text ??
+          response.output
+            ?.flatMap((item) => item.content ?? [])
+            .find((content) => content.type === 'output_text')?.text;
     if (!outputText) {
       throw new ReasoningAiProviderError(
         'OpenAI returned no structured output',
@@ -221,8 +300,11 @@ export class OpenAiReasoningProvider implements ReasoningAiProvider {
       ...(response.usage
         ? {
             usage: {
-              inputTokens: response.usage.input_tokens,
-              outputTokens: response.usage.output_tokens,
+              inputTokens:
+                response.usage.input_tokens ?? response.usage.prompt_tokens,
+              outputTokens:
+                response.usage.output_tokens ??
+                response.usage.completion_tokens,
             },
           }
         : {}),

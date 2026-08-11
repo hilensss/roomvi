@@ -1,0 +1,29 @@
+roomvi.ru {
+	encode zstd gzip
+
+	@release path /release /release/*
+	handle @release {
+		basic_auth {
+			{$RELEASE_AUTH_USER} {$RELEASE_AUTH_PASSWORD_HASH}
+		}
+
+		header X-Robots-Tag "noindex, nofollow, noarchive"
+
+		handle_path /release/api/* {
+			reverse_proxy api:4000
+		}
+
+		handle {
+			reverse_proxy web:3000
+		}
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}

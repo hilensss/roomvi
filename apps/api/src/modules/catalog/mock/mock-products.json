@@ -2054,5 +2054,1207 @@
     "material": "ЛДСП/МДФ",
     "color": "Белый",
     "oldPrice": 109535
-  }
+  },
+  {
+    "externalId": "askona-1851951",
+    "title": "Terek (Терек) 59, цвет белый",
+    "description": "Компактная тумба для обуви Terek 59 из актуального каталога Askona.",
+    "category": "SHOE_CABINET",
+    "roomTypes": ["HALLWAY"],
+    "styleTags": ["MODERN", "SCANDI", "MINIMALISM"],
+    "price": 7199,
+    "oldPrice": 15990,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/2133769.jpg",
+      "https://ir.askona.ru/upload/catalog/233746.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/mebel/tumby-dlya-obuvi/tumba-obuv-terek-59-beliy.htm?productId=1851951&skuId=1853665",
+    "widthCm": 59,
+    "depthCm": 22,
+    "heightCm": 101,
+    "material": "Массив хвойных пород",
+    "color": "Белый"
+  },
+  {
+    "externalId": "askona-1576458",
+    "title": "Rima 70x50, цвет Черный",
+    "description": "Настенное зеркало Rima из актуального каталога Askona.",
+    "category": "MIRROR",
+    "roomTypes": ["HALLWAY", "BATHROOM"],
+    "styleTags": ["MODERN", "MINIMALISM", "LOFT"],
+    "price": 4699,
+    "oldPrice": 6334,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/1946118.jpg",
+      "https://ir.askona.ru/upload/catalog/1946119.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/mebel/zerkala/zerkalo-rima-black-70-50.htm?productId=1576458&skuId=1577124",
+    "widthCm": 70,
+    "depthCm": 2,
+    "heightCm": 50,
+    "material": "Стекло, металл",
+    "color": "Черный"
+  },
+  {
+    "externalId": "askona-44420",
+    "title": "Enigma (Энигма)",
+    "description": "Компактная банкетка Enigma из актуального каталога Askona.",
+    "category": "BENCH",
+    "roomTypes": ["HALLWAY", "BEDROOM"],
+    "styleTags": ["MODERN", "NEOCLASSIC"],
+    "price": 5799,
+    "oldPrice": 23965,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/115030.jpg",
+      "https://ir.askona.ru/upload/catalog/115008.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/mebel/banketki/enigma.htm?productId=44420&skuId=1492073",
+    "widthCm": 55,
+    "depthCm": 40,
+    "heightCm": 46,
+    "material": "Ткань",
+    "color": "Зеленый"
+  },
+  {
+    "externalId": "askona-1538662",
+    "title": "Zima (Зима), Дуб сильверджек + Глиняный серый",
+    "description": "Настенная вешалка Zima из актуального каталога Askona.",
+    "category": "HANGER",
+    "roomTypes": ["HALLWAY"],
+    "styleTags": ["MODERN", "MINIMALISM"],
+    "price": 7499,
+    "oldPrice": 16570,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/144370.jpg",
+      "https://ir.askona.ru/upload/catalog/144374.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/mebel/veshalki-dlya-prikhozhej/zima-dub-glinyaniy-veshalka.htm?productId=1538662&skuId=1538663",
+    "widthCm": 85,
+    "depthCm": 26,
+    "heightCm": 133,
+    "material": "ЛДСП, МДФ",
+    "color": "Дуб, серый"
+  },
+  {
+    "externalId": "askona-1607312",
+    "title": "Mellow (Меллоу), Белый премиум + Дуб сонома",
+    "description": "Детский открытый стеллаж с ящиками Mellow из актуального каталога Askona.",
+    "category": "SHELF",
+    "roomTypes": ["KIDS_ROOM"],
+    "styleTags": ["MODERN", "SCANDI", "MINIMALISM"],
+    "price": 17499,
+    "oldPrice": 29069,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/2141887.jpg",
+      "https://ir.askona.ru/upload/catalog/2141889.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-stellazhi-i-polki/mellow-stelazh.htm?productId=1607312&skuId=1607313",
+    "widthCm": 40,
+    "depthCm": 40,
+    "heightCm": 194,
+    "material": "ЛДСП",
+    "color": "Белый, дуб"
+  },
+  {
+    "externalId": "askona-2067177",
+    "title": "Nery (Нэри)",
+    "description": "Детская кровать Nery 80x160 из актуального каталога Askona.",
+    "category": "BED",
+    "roomTypes": ["KIDS_ROOM"],
+    "styleTags": ["MODERN", "SCANDI"],
+    "price": 17499,
+    "oldPrice": 28009,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/4800893.jpg",
+      "https://ir.askona.ru/upload/catalog/4801045.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/detskie/krovati/krovat-nery.htm?productId=2067177&skuId=2134620",
+    "widthCm": 80,
+    "depthCm": 160,
+    "material": "Ткань",
+    "color": "Голубой"
+  },
+  {
+    "externalId": "askona-1628798",
+    "title": "Luna (Луна), Дуб медовый + Белый премиум",
+    "description": "Детский двухдверный шкаф Luna из актуального каталога Askona.",
+    "category": "WARDROBE",
+    "roomTypes": ["KIDS_ROOM"],
+    "styleTags": ["MODERN", "SCANDI", "MINIMALISM"],
+    "price": 16999,
+    "oldPrice": 24245,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/2141870.jpg",
+      "https://ir.askona.ru/upload/catalog/2141865.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-shkafy/luna-shkaf.htm?productId=1628798&skuId=1666988",
+    "widthCm": 88,
+    "depthCm": 50,
+    "heightCm": 195,
+    "material": "ЛДСП",
+    "color": "Белый, дуб"
+  },
+  {
+    "externalId": "askona-2321134",
+    "title": "Cosmo (Космо), цвет серый",
+    "description": "Эргономичное кресло Cosmo для домашнего офиса или учебного места.",
+    "category": "CHAIR",
+    "roomTypes": ["OFFICE", "KIDS_ROOM"],
+    "styleTags": ["MODERN", "MINIMALISM"],
+    "price": 9999,
+    "oldPrice": 11020,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/4447072.jpg",
+      "https://ir.askona.ru/upload/catalog/4447071.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/home_office/kresla/kreslo-kosmo-seryj.htm?productId=2321134&skuId=2321135",
+    "material": "Ткань, сетка, металл",
+    "color": "Серый"
+  },
+  {
+    "externalId": "askona-1918980",
+    "title": "Clearance (Клиренс)",
+    "description": "Органайзер для хранения в ванной Clearance из актуального каталога Askona.",
+    "category": "DECOR",
+    "roomTypes": ["BATHROOM"],
+    "styleTags": ["MODERN", "MINIMALISM", "SCANDI"],
+    "price": 899,
+    "oldPrice": 1490,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/462240.jpg",
+      "https://ir.askona.ru/upload/catalog/462242.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/hoztovary/dlya-vannoy/aksessuary-dlya-vannoy/organajzer-clearance.htm?productId=1918980&skuId=1919015",
+    "material": "Пластик",
+    "color": "Белый"
+  },
+  {
+    "externalId": "askona-1956044",
+    "title": "Indian Cane (Индиан Кейн)",
+    "description": "Поднос для ванной Indian Cane из актуального каталога Askona.",
+    "category": "DECOR",
+    "roomTypes": ["BATHROOM"],
+    "styleTags": ["MODERN", "SCANDI", "ECO"],
+    "price": 349,
+    "oldPrice": 690,
+    "currency": "RUB",
+    "stockStatus": "IN_STOCK",
+    "imageUrls": [
+      "https://ir.askona.ru/upload/catalog/523365.jpg",
+      "https://ir.askona.ru/upload/catalog/523363.jpg"
+    ],
+    "productUrl": "https://www.askona.ru/hoztovary/dlya-vannoy/aksessuary-dlya-vannoy/podnos-dlya-vannoj-indian-cane.htm?productId=1956044&skuId=1956074",
+    "material": "Бамбук",
+    "color": "Натуральный"
+  },
+    {
+      "externalId": "askona-1851934",
+      "title": "Terek (Терек) 89, цвет белый",
+      "description": "Купите Тумба для обуви Terek (Терек) 89, цвет белый (код: 1853700) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHOE_CABINET",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 11599,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/233849.jpg",
+        "https://ir.askona.ru/upload/catalog/233846.jpg",
+        "https://ir.askona.ru/upload/catalog/233845.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/mebel/tumby-dlya-obuvi/tumba-obuv-terek-89-beliy.htm?productId=1851934&skuId=1853700&SELECTED_HASH_SIZE=89x127x30-53d3ac2e230a5e4d7ba5b8a0b697ae9f",
+      "widthCm": 89,
+      "depthCm": 30,
+      "heightCm": 127,
+      "material": "Массив хвойных пород",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1851943",
+      "title": "Terek (Терек) 89, цвет черный",
+      "description": "Купите Тумба для обуви Terek (Терек) 89, цвет черный (код: 1853692) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHOE_CABINET",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 10899,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/233829.jpg",
+        "https://ir.askona.ru/upload/catalog/233827.jpg",
+        "https://ir.askona.ru/upload/catalog/233831.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/mebel/tumby-dlya-obuvi/tumba-obuv-terek-89-black.htm?productId=1851943&skuId=1853692&SELECTED_HASH_SIZE=89x127x30-53d3ac2e230a5e4d7ba5b8a0b697ae9f",
+      "widthCm": 89,
+      "depthCm": 30,
+      "heightCm": 127,
+      "material": "Массив хвойных пород",
+      "color": "черный"
+    },
+    {
+      "externalId": "askona-2138951",
+      "title": "Keep (Кип), цвет белый",
+      "description": "Купите Тумба для обуви Keep (Кип), цвет белый ЛДСП 16 мм (код: 2139034) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHOE_CABINET",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 3499,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/1819833.jpg",
+        "https://ir.askona.ru/upload/catalog/1819832.jpg",
+        "https://ir.askona.ru/upload/catalog/1819834.jpg"
+      ],
+"productUrl": "https://www.askona.ru/mebel/tumby-dlya-obuvi/tumba-keep-belyy.htm?productId=2138951&skuId=2139034&SELECTED_HASH_SIZE=80x54x47-dd48eb10362f2463cc956059e3eb6fe8",
+    "widthCm": 80,
+    "depthCm": 47,
+    "heightCm": 54,
+    "material": "ЛДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1533010",
+      "title": "Kasli (Касли), цвет Капучино",
+      "description": "Купите Вешалка Kasli (Касли), цвет Капучино (код: 1533200) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "HANGER",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 6399,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/5253691.jpg",
+        "https://ir.askona.ru/upload/catalog/5253692.jpg",
+        "https://ir.askona.ru/upload/catalog/5253693.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/veshalki-dlya-prikhozhej/veshalka-kasli-kapuchino.htm?productId=1533010&skuId=1533200&SELECTED_HASH_SIZE=81x122x26-0cbafdd13a46782bba3fb8bc819441f6",
+    "widthCm": 81,
+    "depthCm": 26,
+    "heightCm": 122,
+    "material": "МДФ/ЛДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1529051",
+      "title": "Olburg (Олбург), цвет Белый/Черный",
+      "description": "Купите Вешалка напольная Olburg (Олбург), цвет Белый/Черный (код: 1535287) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "HANGER",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 4599,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/5172002.jpg",
+        "https://ir.askona.ru/upload/catalog/5172003.jpg",
+        "https://ir.askona.ru/upload/catalog/5172004.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/mebel/veshalki-dlya-prikhozhej/veshalka-olburg-beliy-cherniy.htm?productId=1529051&skuId=1535287&SELECTED_HASH_SIZE=140-1385974ed5904a438616ff7bdb3f7439",
+      "material": "МДФ",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-44421",
+      "title": "Greta",
+      "description": "Купите Банкетка Greta (код: 1908767) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "BENCH",
+      "roomTypes": [
+        "HALLWAY"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 7199,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/5301413.jpg",
+        "https://ir.askona.ru/upload/catalog/5301414.jpg",
+        "https://ir.askona.ru/upload/catalog/5301415.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/banketki/greta.htm?productId=44421&skuId=1908767&SELECTED_HASH_SIZE=55x46x45-6512e0526f0b0211e16361039e4659a4&SELECTED_FABRIC_ID=1315365",
+    "widthCm": 55,
+    "depthCm": 45,
+    "heightCm": 46,
+    "material": "Мягкая мебель",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1575945",
+      "title": "Laena, цвет Белый",
+      "description": "Купите Зеркало Laena, цвет Белый МДФ, зеркальное полотно толщиной 4 мм (код: 1577012) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "MIRROR",
+      "roomTypes": [
+        "HALLWAY",
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 11999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/1946026.jpg",
+        "https://ir.askona.ru/upload/catalog/1946023.jpg",
+        "https://ir.askona.ru/upload/catalog/1946025.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/zerkala/zerkalo-laena-white.htm?productId=1575945&skuId=1577012&SELECTED_HASH_SIZE=175x50-6d938f61d95caf83f7a055c1efed775c",
+    "widthCm": 50,
+    "depthCm": 2,
+    "heightCm": 175,
+    "material": "МДФ, зеркальное полотно толщиной 4 мм",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1576349",
+      "title": "Bailey 150x60, цвет Белый",
+      "description": "Купите Зеркало Bailey 150x60, цвет Белый МДФ, зеркальное полотно толщиной 4 мм (код: 1577079) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "MIRROR",
+      "roomTypes": [
+        "HALLWAY",
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 8299,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4802600.jpg",
+        "https://ir.askona.ru/upload/catalog/4802605.jpg",
+        "https://ir.askona.ru/upload/catalog/4802609.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/zerkala/zerkalo-bailey-white-150-60.htm?productId=1576349&skuId=1577079&SELECTED_HASH_SIZE=150x60-92f40efe461bfb0671d540ab669a4e4d",
+    "widthCm": 60,
+    "depthCm": 2,
+    "heightCm": 150,
+    "material": "МДФ, зеркальное полотно толщиной 4 мм",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1576262",
+      "title": "Bailey 150x40, цвет Белый",
+      "description": "Купите Зеркало Bailey 150x40, цвет Белый МДФ, зеркальное полотно толщиной 4 мм (код: 1577072) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "MIRROR",
+      "roomTypes": [
+        "HALLWAY",
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 6599,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4802592.jpg",
+        "https://ir.askona.ru/upload/catalog/4802595.jpg",
+        "https://ir.askona.ru/upload/catalog/4802598.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/zerkala/zerkalo-bailey-white-150-40.htm?productId=1576262&skuId=1577072&SELECTED_HASH_SIZE=150x40-eb834f26c4a179944ac2a97a303787e0",
+    "widthCm": 40,
+    "depthCm": 2,
+    "heightCm": 150,
+    "material": "МДФ, зеркальное полотно толщиной 4 мм",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1575938",
+      "title": "Bailey 120x40, цвет Белый",
+      "description": "Купите Зеркало Bailey 120x40, цвет Белый МДФ, зеркальное полотно толщиной 4 мм (код: 1594640) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "MIRROR",
+      "roomTypes": [
+        "HALLWAY",
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 5499,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/245744.jpg",
+        "https://ir.askona.ru/upload/catalog/245748.jpg",
+        "https://ir.askona.ru/upload/catalog/245746.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/zerkala/zerkalo-bailey-white-120-40.htm?productId=1575938&skuId=1594640&SELECTED_HASH_SIZE=120x40-f3e6dc9c164062d0b7958e4e689ac47c",
+    "widthCm": 40,
+    "depthCm": 2,
+    "heightCm": 120,
+    "material": "МДФ, зеркальное полотно толщиной 4 мм",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1902499",
+      "title": "Fantasy new (Фантастическая новинка), цвет светло-зеленый",
+      "description": "Купите Коврик для ванной Fantasy new (Фантастическая новинка), цвет светло-зеленый (код: 1902502) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 449,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/262800.jpg",
+        "https://ir.askona.ru/upload/catalog/262799.jpg",
+        "https://ir.askona.ru/upload/catalog/262798.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/fantasy-new-light-green.htm?productId=1902499&skuId=1902502&SELECTED_HASH_SIZE=70x50-a4b2635c44dc0d09c7b8a26c3bbfaca2",
+    "widthCm": 70,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Хлопок 100%",
+      "color": "Светло-зеленый"
+    },
+    {
+      "externalId": "askona-1902518",
+      "title": "Fantasy new (Фантастическая новинка), цвет серый",
+      "description": "Купите Коврик для ванной Fantasy new (Фантастическая новинка), цвет серый (код: 1902521) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 449,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/262822.jpg",
+        "https://ir.askona.ru/upload/catalog/262823.jpg",
+        "https://ir.askona.ru/upload/catalog/262821.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/fantasy-new-grey.htm?productId=1902518&skuId=1902521&SELECTED_HASH_SIZE=70x50-a4b2635c44dc0d09c7b8a26c3bbfaca2",
+    "widthCm": 70,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Хлопок 100%",
+      "color": "Серый"
+    },
+    {
+      "externalId": "askona-1902508",
+      "title": "Fantasy new (Фантастическая новинка), цвет зеленый",
+      "description": "Купите Коврик для ванной Fantasy new (Фантастическая новинка), цвет зеленый (код: 1902509) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 449,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/262808.jpg",
+        "https://ir.askona.ru/upload/catalog/262809.jpg",
+        "https://ir.askona.ru/upload/catalog/262807.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/fantasy-new-green.htm?productId=1902508&skuId=1902509&SELECTED_HASH_SIZE=70x50-a4b2635c44dc0d09c7b8a26c3bbfaca2",
+    "widthCm": 70,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Хлопок 100%",
+      "color": "Зеленый"
+    },
+    {
+      "externalId": "askona-1902497",
+      "title": "Fantasy new (Фантастическая новинка), цвет коричневый",
+      "description": "Купите Коврик для ванной Fantasy new (Фантастическая новинка), цвет коричневый (код: 1902498) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 449,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/262796.jpg",
+        "https://ir.askona.ru/upload/catalog/262797.jpg",
+        "https://ir.askona.ru/upload/catalog/262795.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/fantasy-new-light-brown.htm?productId=1902497&skuId=1902498&SELECTED_HASH_SIZE=70x50-a4b2635c44dc0d09c7b8a26c3bbfaca2",
+    "widthCm": 70,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Хлопок 100%",
+      "color": "Коричневый"
+    },
+    {
+      "externalId": "askona-1884068",
+      "title": "Fluffy new (Флаффи новый), цвет серый",
+      "description": "Купите Ковер Fluffy new (Флаффи новый), цвет серый (код: 1884069) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 1919,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/517581.jpg",
+        "https://ir.askona.ru/upload/catalog/517582.jpg",
+        "https://ir.askona.ru/upload/catalog/517584.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/kover-fluffy-new-grey.htm?productId=1884068&skuId=1884069&SELECTED_HASH_SIZE=90x50-dbcc97426bb6f920250ead06347cf876",
+    "widthCm": 90,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Ворс 100 % полиэстер",
+      "color": "Серый"
+    },
+    {
+      "externalId": "askona-1902503",
+      "title": "Fantasy new (Фантастическая новинка), цвет розовый",
+      "description": "Купите Коврик для ванной Fantasy new (Фантастическая новинка), цвет розовый (код: 1902504) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DECOR",
+      "roomTypes": [
+        "BATHROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 449,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/262801.jpg",
+        "https://ir.askona.ru/upload/catalog/262803.jpg",
+        "https://ir.askona.ru/upload/catalog/262802.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/tekstil/dlya-vanny/kovriki-dlya-vanny/fantasy-new-pink.htm?productId=1902503&skuId=1902504&SELECTED_HASH_SIZE=70x50-a4b2635c44dc0d09c7b8a26c3bbfaca2",
+    "widthCm": 70,
+    "depthCm": 50,
+    "heightCm": 1,
+    "material": "Хлопок 100%",
+      "color": "Розовый"
+    },
+    {
+      "externalId": "askona-2320952",
+      "title": "Tich (Тич), цвет Гикори джексон+Белый",
+      "description": "Купить Стол письменный Tich (Тич), цвет Гикори джексон+Белый в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "DESK",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 22899,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4189592.jpg",
+        "https://ir.askona.ru/upload/catalog/4189593.jpg",
+        "https://ir.askona.ru/upload/catalog/4189594.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/home_office/stoly/stol-tich-gikori-dzhekson-white.htm?productId=2320952&skuId=2320974&SELECTED_HASH_SIZE=120x170x60-74aebda491ad55022e3793fffc1cb54c",
+    "widthCm": 120,
+    "depthCm": 60,
+    "heightCm": 170,
+    "material": "ЛДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-2320880",
+      "title": "Helmi (Хельми), Гикори кингстон+Белый блеск",
+      "description": "Купить Стол письменный с ящиками Helmi (Хельми), Гикори кингстон+Белый блеск в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "DESK",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 16299,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4189365.jpg",
+        "https://ir.askona.ru/upload/catalog/4189364.jpg",
+        "https://ir.askona.ru/upload/catalog/4189367.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/home_office/stoly/stol-pismenniy-s-yaschikami-helmi-gikori-white.htm?productId=2320880&skuId=2320903&SELECTED_HASH_SIZE=130x76x58-c034bdbba97ce590fa37692fd2c34bf2",
+    "widthCm": 130,
+    "depthCm": 58,
+    "heightCm": 76,
+    "material": "ЛДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-2331945",
+      "title": "Walt (Уолт), цвет Сатин + дуб сонома",
+      "description": "Купить Стол письменный Walt (Уолт), цвет Сатин + дуб сонома в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "DESK",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 21699,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4297184.jpg",
+        "https://ir.askona.ru/upload/catalog/4297185.jpg",
+        "https://ir.askona.ru/upload/catalog/4297186.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/home_office/stoly/stol-walt-satin.htm?productId=2331945&skuId=2331946&SELECTED_HASH_SIZE=136-42a0e188f5033bc65bf8d78622277c4e",
+    "widthCm": 136,
+    "depthCm": 139.2,
+    "heightCm": 75.2,
+    "material": "Комбинированные материалы",
+      "color": "Сатин"
+    },
+    {
+      "externalId": "askona-2320977",
+      "title": "Tim (Тим), цвет Белый",
+      "description": "Купить Стол письменный 3 ящика Tim (Тим), цвет Белый в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "DESK",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 15099,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4189606.jpg",
+        "https://ir.askona.ru/upload/catalog/4189609.jpg",
+        "https://ir.askona.ru/upload/catalog/4189605.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/home_office/stoly/stol-tim-3-yaschika-beliy.htm?productId=2320977&skuId=2320998&SELECTED_HASH_SIZE=116x75x65-31eea3843f455588818f80239e1f7051",
+    "widthCm": 116,
+    "depthCm": 65,
+    "heightCm": 75,
+    "material": "Кашированное ДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-2331902",
+      "title": "Sierra (Сиерра), цвет серый",
+      "description": "Купить Кресло офисное Sierra (Сиерра), цвет серый в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "CHAIR",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 14399,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4447102.jpg",
+        "https://ir.askona.ru/upload/catalog/4447106.jpg",
+        "https://ir.askona.ru/upload/catalog/4447103.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/home_office/kresla/sierra-grey-kreslo.htm?productId=2331902&skuId=2331907",
+      "material": "Пластик",
+      "color": "Серый"
+    },
+    {
+      "externalId": "askona-2331944",
+      "title": "Hampton (Хэмптон), цвет серый",
+      "description": "Купить Кресло офисное Hampton (Хэмптон), цвет серый в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "CHAIR",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 14999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4297176.jpg",
+        "https://ir.askona.ru/upload/catalog/4297172.jpg",
+        "https://ir.askona.ru/upload/catalog/4297173.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/home_office/kresla/hampton-grey-kreslo.htm?productId=2331944&skuId=2331954",
+      "material": "Комбинированные материалы",
+      "color": "Серый"
+    },
+    {
+      "externalId": "askona-2330807",
+      "title": "Banks (Банкс), цвет серый",
+      "description": "Купить Кресло офисное Banks (Банкс), цвет серый в интернет-магазине Аскона с возможностью доставки по Москве и России. Стоимость товара от 0 руб.",
+      "category": "CHAIR",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 20999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4291160.jpg",
+        "https://ir.askona.ru/upload/catalog/4291159.jpg",
+        "https://ir.askona.ru/upload/catalog/4291162.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/home_office/kresla/kreslo-banks-grey.htm?productId=2330807&skuId=2330811",
+      "material": "Комбинированные материалы",
+      "color": "Серый"
+    },
+    {
+      "externalId": "askona-1645642",
+      "title": "Terek (Терек) 049, цвет белый",
+      "description": "Купите Шкаф книжный Terek (Терек) 049, цвет белый (код: 1656728) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHELF",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 16699,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/452510.jpg",
+        "https://ir.askona.ru/upload/catalog/452512.jpg",
+        "https://ir.askona.ru/upload/catalog/452511.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/konsoli-i-stellazhi/shkaf-terek-white-049.htm?productId=1645642&skuId=1656728&SELECTED_HASH_SIZE=49x197x37-b00fb7d6816801fc7aa6289f1825c404",
+    "widthCm": 49,
+    "depthCm": 37,
+    "heightCm": 197,
+    "material": "Массив хвойных пород",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1645652",
+      "title": "Terek (Терек) 090, цвет белый",
+      "description": "Купите Шкаф книжный Terek (Терек) 090, цвет белый (код: 1656745) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHELF",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 21399,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/129029.jpg",
+        "https://ir.askona.ru/upload/catalog/129032.jpg",
+        "https://ir.askona.ru/upload/catalog/129035.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/konsoli-i-stellazhi/shkaf-terek-white-090.htm?productId=1645652&skuId=1656745&SELECTED_HASH_SIZE=90x197x37-3f3a860b13056addd986258810d73ae3",
+    "widthCm": 90,
+    "depthCm": 37,
+    "heightCm": 197,
+    "material": "Массив хвойных пород",
+      "color": "Белый"
+    },
+    {
+      "externalId": "askona-1645650",
+      "title": "Terek (Терек) 049, цвет белый + светло-коричневый",
+      "description": "Купите Шкаф книжный Terek (Терек) 049, цвет белый + светло-коричневый (код: 1656743) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHELF",
+      "roomTypes": [
+        "OFFICE"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 16699,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/452523.jpg",
+        "https://ir.askona.ru/upload/catalog/452526.jpg",
+        "https://ir.askona.ru/upload/catalog/452522.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/mebel/konsoli-i-stellazhi/shkaf-terek-white-svetlo-korichneviy-049.htm?productId=1645650&skuId=1656743&SELECTED_HASH_SIZE=49x197x37-b00fb7d6816801fc7aa6289f1825c404",
+    "widthCm": 49,
+    "depthCm": 37,
+    "heightCm": 197,
+    "material": "Массив хвойных пород",
+      "color": "Белый + светло-коричневый"
+    },
+    {
+      "externalId": "askona-2156716",
+      "title": "Polly (Полли)",
+      "description": "Купите Детская кровать-трансформер Polly (Полли) розовый (код: 2156719) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "BED",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 47799,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/1991616.jpg",
+        "https://ir.askona.ru/upload/catalog/1991618.jpg",
+        "https://ir.askona.ru/upload/catalog/1991623.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/krovati/polly.htm?productId=2156716&skuId=2156719&SELECTED_HASH_SIZE=63x133-69a55e77e07d34b794cfddb06980d20a",
+    "widthCm": 63,
+    "depthCm": 133,
+    "material": "Комбинированные материалы",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-2090045",
+      "title": "Ruby Duo (Руби Дуо)",
+      "description": "Купите Кровать Ruby Duo (Руби Дуо) белая для детей (код: 2122975) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "BED",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 46999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/2236336.jpg",
+        "https://ir.askona.ru/upload/catalog/2236337.jpg",
+        "https://ir.askona.ru/upload/catalog/2236338.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/krovati/ruby-duo.htm?productId=2090045&skuId=2122975&SELECTED_HASH_SIZE=80x200x91-5a22fe5973a1bcac72fe5e63471f316c",
+    "widthCm": 80,
+    "depthCm": 200,
+    "heightCm": 91,
+    "material": "Комбинированные материалы",
+      "color": "Белый базовый"
+    },
+    {
+      "externalId": "askona-2044022",
+      "title": "Opty (Опти)",
+      "description": "Купите Кровать раздвижная Opty (Опти) для детей (код: 2125265) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "BED",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 29999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/2233613.jpg",
+        "https://ir.askona.ru/upload/catalog/2233616.jpg",
+        "https://ir.askona.ru/upload/catalog/2233614.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/krovati/opty-krovat.htm?productId=2044022&skuId=2125265&SELECTED_HASH_SIZE=160x200-af13bfd624e1acd34f2103481efea402",
+    "widthCm": 160,
+    "depthCm": 200,
+    "material": "Комбинированные материалы",
+      "color": "Белый базовый"
+    },
+    {
+      "externalId": "askona-2044024",
+      "title": "Lenny (Ленни)",
+      "description": "Купите Кровать-тахта Lenny (Ленни) Зеленый+Белый для детей (код: 2125286) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "BED",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 39999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/2195855.jpg",
+        "https://ir.askona.ru/upload/catalog/2195853.jpg",
+        "https://ir.askona.ru/upload/catalog/2195856.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/krovati/krovat-tahta-lenny.htm?productId=2044024&skuId=2125286&SELECTED_HASH_SIZE=90x200x85-d1087e87a368b32799161663c6e4b168",
+    "widthCm": 90,
+    "depthCm": 200,
+    "heightCm": 85,
+    "material": "Комбинированные материалы",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1622404",
+      "title": "Luna (Луна), цвет Дуб медовый + Белый премиум",
+      "description": "Купите Стол письменный Luna (Луна), цвет Дуб медовый + Белый премиум Дуб Медовый + Белый Премиум для детей (код: 1640363) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DESK",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 6999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/338764.jpg",
+        "https://ir.askona.ru/upload/catalog/338766.jpg",
+        "https://ir.askona.ru/upload/catalog/338765.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-stoly-i-stulya/luna-stol.htm?productId=1622404&skuId=1640363&SELECTED_HASH_SIZE=120x120x74-a2f2710787308eb773a319df45fc0eab",
+    "widthCm": 120,
+    "depthCm": 120,
+    "heightCm": 74,
+    "material": "ЛДСП",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1575811",
+      "title": "Villy (Вилли), цвет Белый+Дуб",
+      "description": "Купите Стол письменный Villy (Вилли), цвет Белый+Дуб для детей (код: 1575812) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "DESK",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 15999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/343712.jpg",
+        "https://ir.askona.ru/upload/catalog/343713.jpg",
+        "https://ir.askona.ru/upload/catalog/343714.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-stoly-i-stulya/villy-white-dub-stol.htm?productId=1575811&skuId=1575812&SELECTED_HASH_SIZE=100x100x75-747ca0ce74dab8560fbb820f4bb81349",
+    "widthCm": 100,
+    "depthCm": 100,
+    "heightCm": 75,
+    "material": "Комбинированные материалы",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1860603",
+      "title": "Teddy (Тедди), цвет розовый",
+      "description": "Купите Детское кресло Teddy (Тедди), цвет розовый (код: 1862787) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "CHAIR",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 15799,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/241828.jpg",
+        "https://ir.askona.ru/upload/catalog/241829.jpg",
+        "https://ir.askona.ru/upload/catalog/241830.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/detskie/detskie-stoly-i-stulya/kreslo-detskoye-teddy-rozoviy.htm?productId=1860603&skuId=1862787&SELECTED_HASH_SIZE=51-2838023a778dfaecdc212708f721b788",
+      "material": "Комбинированные материалы",
+      "color": "Розовый"
+    },
+    {
+      "externalId": "askona-2349873",
+      "title": "Askona Kids Snep (Снэп) сиреневый",
+      "description": "Купите Кресло детское Askona Kids Snep (Снэп) сиреневый (код: 2363475) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "CHAIR",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 16999,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/4890458.jpg",
+        "https://ir.askona.ru/upload/catalog/4890463.jpg",
+        "https://ir.askona.ru/upload/catalog/4890465.jpg"
+      ],
+      "productUrl": "https://www.askona.ru/detskie/detskie-stoly-i-stulya/askona-kids-snep-sirenevyi.htm?productId=2349873&skuId=2363475",
+      "material": "Комбинированные материалы",
+      "color": "Нейтральный"
+    },
+    {
+      "externalId": "askona-1607316",
+      "title": "Mellow (Меллоу), цвет Белый премиум + Дуб сонома",
+      "description": "Купите Шкаф двухдверный Mellow (Меллоу), цвет Белый премиум + Дуб сонома Белый премиум + Дуб Сонома для детей (код: 1607317) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "WARDROBE",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 31599,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/2343249.jpg",
+        "https://ir.askona.ru/upload/catalog/2343250.jpg",
+        "https://ir.askona.ru/upload/catalog/2343252.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-shkafy/mellow-shkaf.htm?productId=1607316&skuId=1607317&SELECTED_HASH_SIZE=100x100x194-d4acd17448086a47b0a0271cf323f00d",
+    "widthCm": 100,
+    "depthCm": 47,
+    "heightCm": 194,
+    "material": "Комбинированные материалы",
+      "color": "Белый премиум/Дуб сонома"
+    },
+    {
+      "externalId": "askona-1817115",
+      "title": "Bruno (Бруно), цвет Белый+Дуб Золотой",
+      "description": "Купите Стеллаж-домик Bruno (Бруно), цвет Белый+Дуб Золотой для детей (код: 2152275) в интернет-магазине Аскона! Характеристики и отзывы. Широкий выбор цветов и материалов. Доставка по всей России.",
+      "category": "SHELF",
+      "roomTypes": [
+        "KIDS_ROOM"
+      ],
+      "styleTags": [
+        "MODERN",
+        "SCANDI",
+        "MINIMALISM"
+      ],
+      "price": 10599,
+      "currency": "RUB",
+      "stockStatus": "IN_STOCK",
+      "imageUrls": [
+        "https://ir.askona.ru/upload/catalog/2141845.jpg",
+        "https://ir.askona.ru/upload/catalog/2141844.jpg",
+        "https://ir.askona.ru/upload/catalog/2141846.jpg"
+      ],
+    "productUrl": "https://www.askona.ru/detskie/detskie-stellazhi-i-polki/bruno-stellazh-domik.htm?productId=1817115&skuId=2152275&SELECTED_HASH_SIZE=91-54229abfcfa5649e7003b83dd4755294",
+    "widthCm": 91,
+    "depthCm": 40,
+    "heightCm": 141,
+    "material": "Комбинированные материалы",
+      "color": "Нейтральный"
+    }
 ]

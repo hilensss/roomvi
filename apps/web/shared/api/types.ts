@@ -27,10 +27,20 @@ export type ProductCategory =
   | 'TABLE'
   | 'COFFEE_TABLE'
   | 'BED'
+  | 'TV_STAND'
   | 'WARDROBE'
-  | 'LIGHTING'
+  | 'DRESSER'
+  | 'SHELF'
+  | 'DESK'
+  | 'LAMP'
   | 'RUG'
-  | 'DECOR';
+  | 'DECOR'
+  | 'MATTRESS'
+  | 'MIRROR'
+  | 'BENCH'
+  | 'SHOE_CABINET'
+  | 'HANGER'
+  | 'OTHER';
 
 export type GenerationJobStatus =
   | 'PENDING'

@@ -17,8 +17,9 @@ export type AuthResponse = {
   user: AuthUser;
 };
 
-export function getCurrentUser() {
-  return apiFetch<AuthUser>('/auth/me');
+export async function getCurrentUser() {
+  const response = await apiFetch<AuthResponse>('/auth/me');
+  return response.user;
 }
 
 export function login(input: LoginInput) {

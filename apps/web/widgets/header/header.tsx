@@ -23,7 +23,7 @@ export function Header() {
       <div className="rv-container flex h-20 items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 md:gap-3">
           <Image
-            src="/brand/rmark.svg"
+            src={`${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/brand/rmark.svg`}
             alt=""
             width={44}
             height={44}

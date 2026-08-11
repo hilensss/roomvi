@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { BadRequestException } from '@nestjs/common';
 import {
   B2BProjectStatus,
   GenerationJobStatus,
@@ -80,6 +81,7 @@ function createHarness(generateDesigns, options = {}) {
     status: GenerationJobStatus.PENDING,
     scenario: options.scenario ?? GenerationScenario.MARKETPLACE,
     requestedVariants: options.requestedVariants ?? null,
+    inputParams: options.inputParams ?? null,
     roomProject: project,
   };
   const jobUpdates = [];
@@ -128,23 +130,47 @@ function createHarness(generateDesigns, options = {}) {
   const aiProviderFactory = {
     getProvider: () => ({ providerName: 'MOCK', generateDesigns }),
   };
-  const productMatchingService = {
-    buildProductSetForVariant: async (input) => {
-      matchingCalls.push(input);
-      const { variantNumber } = input;
-      const product = createProduct(variantNumber);
-      return {
-        products: [product],
-        totalPrice: product.price,
-        missingRequiredCategories: [],
-      };
-    },
+  const defaultCurateMarketplace = async (input, variantsCount) => {
+      matchingCalls.push({ input, variantsCount });
+      return Array.from({ length: variantsCount }, (_, index) => {
+        const variantIndex = index + 1;
+        const selectedProduct = createProduct(variantIndex);
+        return {
+          curationMode: 'AI_CURATED',
+          curatorModel: 'gpt-5.6-luna',
+          curationDurationMs: 123,
+          products: [selectedProduct],
+          totalPrice: selectedProduct.price,
+          missingRequiredCategories: [],
+          spatialProfile: {
+            windowPositions: [],
+            doorPositions: [],
+            circulationConstraints: [],
+            sizeClass: 'MEDIUM',
+            source: 'DIMENSIONS',
+          },
+          scenePlan: {
+            roomKey: input.roomKey,
+            variantIndex,
+            direction: `Variant ${variantIndex}`,
+            selectedProductIds: [selectedProduct.id],
+            density: 'balanced',
+            functionalZones: [],
+            placementHints: [],
+          },
+        };
+      });
+  };
+  const productCurationService = {
+    curateMarketplace:
+      options.curateMarketplace ?? defaultCurateMarketplace,
   };
   const service = new GenerationProcessingService(
     prisma,
     promptBuilder,
     aiProviderFactory,
-    productMatchingService,
+    productCurationService,
+    options.developerRoomGenerationService ?? null,
   );
 
   return {
@@ -167,6 +193,136 @@ function createGeneratedVariant(input, variantNumber) {
     productIds: input.products.map((product) => product.id),
   };
 }
+
+test('persists AI-curated marketplace selection metadata without replacing existing input params', async () => {
+  const { service, jobUpdates } = createHarness(
+    async (input) => [
+      createGeneratedVariant(input, getVariantNumber(input)),
+    ],
+    { inputParams: { legacyField: 'keep-me' } },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  const metadataUpdate = jobUpdates.find((update) => update.inputParams);
+  assert.deepEqual(metadataUpdate.inputParams, {
+    legacyField: 'keep-me',
+    productSelection: {
+      mode: 'AI_CURATED',
+      scenario: GenerationScenario.MARKETPLACE,
+      requestedPlanCount: 4,
+      aiPlanCount: 4,
+      deterministicPlanCount: 0,
+      repairedPlanCount: 0,
+      model: 'gpt-5.6-luna',
+      durationMs: 123,
+    },
+  });
+});
+
+test('persists repaired curator counts without treating them as deterministic fallback', async () => {
+  const curateMarketplace = async (input, variantsCount) =>
+    Array.from({ length: variantsCount }, (_, index) => {
+      const variantIndex = index + 1;
+      const selectedProduct = createProduct(variantIndex);
+      return {
+        curationMode:
+          variantIndex === 2 ? 'AI_CURATED_REPAIRED' : 'AI_CURATED',
+        curatorModel: 'gpt-5.6-luna',
+        curationDurationMs: 321,
+        products: [selectedProduct],
+        totalPrice: selectedProduct.price,
+        missingRequiredCategories: [],
+        spatialProfile: {
+          windowPositions: [],
+          doorPositions: [],
+          circulationConstraints: [],
+          sizeClass: 'MEDIUM',
+          source: 'DIMENSIONS',
+        },
+        scenePlan: {
+          roomKey: input.roomKey,
+          variantIndex,
+          direction: `Variant ${variantIndex}`,
+          selectedProductIds: [selectedProduct.id],
+          density: 'balanced',
+          functionalZones: [],
+          placementHints: [],
+        },
+      };
+    });
+  const { service, jobUpdates } = createHarness(
+    async (input) => [createGeneratedVariant(input, getVariantNumber(input))],
+    { curateMarketplace },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  const metadataUpdate = jobUpdates.find((update) => update.inputParams);
+  assert.ok(metadataUpdate);
+  assert.deepEqual(metadataUpdate.inputParams.productSelection, {
+    mode: 'AI_CURATED_REPAIRED',
+    scenario: GenerationScenario.MARKETPLACE,
+    requestedPlanCount: 4,
+    aiPlanCount: 3,
+    deterministicPlanCount: 0,
+    repairedPlanCount: 1,
+    model: 'gpt-5.6-luna',
+    durationMs: 321,
+  });
+});
+
+test('persists deterministic fallback metadata after a marketplace curator timeout', async () => {
+  const curateMarketplace = async (input, variantsCount) =>
+    Array.from({ length: variantsCount }, (_, index) => {
+      const variantIndex = index + 1;
+      const selectedProduct = createProduct(variantIndex);
+      return {
+        curationMode: 'DETERMINISTIC_FALLBACK',
+        fallbackReason: 'TIMEOUT',
+        curatorModel: 'gpt-5.6-luna',
+        curationDurationMs: 12_004,
+        products: [selectedProduct],
+        totalPrice: selectedProduct.price,
+        missingRequiredCategories: [],
+        spatialProfile: {
+          windowPositions: [],
+          doorPositions: [],
+          circulationConstraints: [],
+          sizeClass: 'MEDIUM',
+          source: 'DIMENSIONS',
+        },
+        scenePlan: {
+          roomKey: input.roomKey,
+          variantIndex,
+          direction: `Fallback ${variantIndex}`,
+          selectedProductIds: [selectedProduct.id],
+          density: 'balanced',
+          functionalZones: [],
+          placementHints: [],
+        },
+      };
+    });
+  const { service, jobUpdates } = createHarness(
+    async (input) => [createGeneratedVariant(input, getVariantNumber(input))],
+    { curateMarketplace },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  const metadataUpdate = jobUpdates.find((update) => update.inputParams);
+  assert.deepEqual(metadataUpdate.inputParams.productSelection, {
+    mode: 'DETERMINISTIC_FALLBACK',
+    scenario: GenerationScenario.MARKETPLACE,
+    requestedPlanCount: 4,
+    aiPlanCount: 0,
+    deterministicPlanCount: 4,
+    repairedPlanCount: 0,
+    fallbackReason: 'TIMEOUT',
+    model: 'gpt-5.6-luna',
+    durationMs: 12_004,
+  });
+});
 
 test('furniture jobs generate exactly two variants from up to ten unchanged manual products without a room photo', async () => {
   const fixedProducts = Array.from({ length: 10 }, (_, index) =>
@@ -225,6 +381,53 @@ test('furniture jobs generate exactly two variants from up to ten unchanged manu
   );
 });
 
+test('furniture-line persists MANUAL selection metadata and preserves product order', async () => {
+  const fixedProducts = [createProduct(31), createProduct(32), createProduct(33)];
+  fixedProducts[1] = {
+    ...fixedProducts[1],
+    category: ProductCategory.LAMP,
+    title: 'Подвесной светильник manual selection',
+  };
+  const b2bProject = {
+    id: 'b2b-project-1',
+    status: B2BProjectStatus.GENERATING,
+    products: fixedProducts.map((product, sortOrder) => ({
+      productId: product.id,
+      sortOrder,
+      product,
+    })),
+  };
+  const { service, jobUpdates, matchingCalls, createdVariants } = createHarness(
+    async (input) => [createGeneratedVariant(input, getVariantNumber(input))],
+    {
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedVariants: 2,
+      b2bProject,
+      inputParams: { legacyField: true },
+    },
+  );
+
+  await service.processGenerationJob('job-1');
+
+  assert.equal(matchingCalls.length, 0);
+  const metadataUpdate = jobUpdates.find((update) => update.inputParams);
+  assert.deepEqual(metadataUpdate.inputParams, {
+    legacyField: true,
+    productSelection: {
+      mode: 'MANUAL',
+      scenario: GenerationScenario.B2B_FURNITURE_LINE,
+      requestedPlanCount: 2,
+      aiPlanCount: 0,
+      deterministicPlanCount: 0,
+      repairedPlanCount: 0,
+    },
+  });
+  assert.deepEqual(
+    createdVariants[0].products.create.map(({ productId }) => productId),
+    fixedProducts.map(({ id }) => id),
+  );
+});
+
 test('furniture jobs reject ten products when an empty-room photo is supplied', async () => {
   const fixedProducts = Array.from({ length: 10 }, (_, index) =>
     createProduct(index + 1),
@@ -269,7 +472,7 @@ test('runs two variants concurrently and preserves variant order', async () => {
     [4, 10],
   ]);
 
-  const { service, createdVariants } = createHarness(async (input) => {
+  const { service, createdVariants, matchingCalls } = createHarness(async (input) => {
     const variantNumber = getVariantNumber(input);
     starts.push(variantNumber);
     activeCalls += 1;
@@ -281,6 +484,8 @@ test('runs two variants concurrently and preserves variant order', async () => {
 
   await service.processGenerationJob('job-1');
 
+  assert.equal(matchingCalls.length, 1);
+  assert.equal(matchingCalls[0].variantsCount, 4);
   assert.equal(maximumActiveCalls, 2);
   assert.deepEqual(starts.slice(0, 3), [1, 2, 3]);
   assert.deepEqual(
@@ -297,7 +502,9 @@ test('retries a failed variant three times without repeating successful variants
     attempts.set(variantNumber, attempt);
 
     if (variantNumber === 1 && attempt < 4) {
-      throw new Error('temporary provider failure');
+      throw Object.assign(new Error('temporary provider failure'), {
+        statusCode: 503,
+      });
     }
 
     return [createGeneratedVariant(input, variantNumber)];
@@ -336,7 +543,9 @@ test('exhausting retries waits for in-flight work before failing the job', async
       try {
         if (variantNumber === 1) {
           await sleep(0);
-          throw new Error('permanent provider failure');
+          throw Object.assign(new Error('permanent provider failure'), {
+            statusCode: 503,
+          });
         }
 
         await sleep(50);
@@ -487,7 +696,9 @@ test('a retry cannot reset progress already reported by its variant', async () =
       });
 
       if (firstVariantAttempt === 1) {
-        throw new Error('retry after reporting progress');
+        throw Object.assign(new Error('retry after reporting progress'), {
+          statusCode: 503,
+        });
       }
     }
 
@@ -560,4 +771,71 @@ test('fails the whole job when a planned provider call returns extra output', as
     jobUpdates.some((update) => update.status === GenerationJobStatus.FAILED),
     true,
   );
+});
+
+test('transport timeout and HTTP 504 are retried with bounded attempts', async () => {
+  const attempts = new Map();
+  const { service } = createHarness(async (input) => {
+    const variantNumber = getVariantNumber(input);
+    const attempt = (attempts.get(variantNumber) ?? 0) + 1;
+    attempts.set(variantNumber, attempt);
+
+    if (variantNumber === 1 && attempt === 1) {
+      throw new Error('ETIMEDOUT while calling provider');
+    }
+    if (variantNumber === 2 && attempt === 1) {
+      throw Object.assign(new Error('gateway timeout'), { statusCode: 504 });
+    }
+
+    return [createGeneratedVariant(input, variantNumber)];
+  });
+
+  await service.processGenerationJob('job-1');
+
+  assert.equal(attempts.get(1), 2);
+  assert.equal(attempts.get(2), 2);
+  assert.equal(attempts.get(3), 1);
+  assert.equal(attempts.get(4), 1);
+});
+
+test('PROMPT_NOT_VALID does not retry', async () => {
+  let firstVariantAttempts = 0;
+  const { service } = createHarness(async (input) => {
+    const variantNumber = getVariantNumber(input);
+
+    if (variantNumber === 1) {
+      firstVariantAttempts += 1;
+      throw Object.assign(new Error('YES AI failed: PROMPT_NOT_VALID'), {
+        statusCode: 400,
+      });
+    }
+
+    return [createGeneratedVariant(input, variantNumber)];
+  });
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /PROMPT_NOT_VALID/,
+  );
+  assert.equal(firstVariantAttempts, 1);
+});
+
+test('BadRequestException does not retry', async () => {
+  let firstVariantAttempts = 0;
+  const { service } = createHarness(async (input) => {
+    const variantNumber = getVariantNumber(input);
+
+    if (variantNumber === 1) {
+      firstVariantAttempts += 1;
+      throw new BadRequestException('invalid generation contract');
+    }
+
+    return [createGeneratedVariant(input, variantNumber)];
+  });
+
+  await assert.rejects(
+    service.processGenerationJob('job-1'),
+    /invalid generation contract/,
+  );
+  assert.equal(firstVariantAttempts, 1);
 });

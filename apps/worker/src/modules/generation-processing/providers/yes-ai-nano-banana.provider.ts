@@ -15,35 +15,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { AiReferenceImageCacheService } from '../services/ai-reference-image-cache.service.js';
+import {
+  getProductRenderProfile,
+  getRenderPriorityRank,
+} from '../product-render-profile.js';
 
 const RESULT_IMAGE_DOWNLOAD_TIMEOUT_SECONDS = 60;
 const RESULT_IMAGE_CURL_CONNECT_TIMEOUT_SECONDS = 5;
 const RESULT_IMAGE_CURL_RETRIES = 2;
 const RESULT_IMAGE_CURL_RETRY_DELAY_SECONDS = 1;
 const MAX_RESULT_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_PRODUCT_REFERENCES = 6;
+const MAX_PROVIDER_PROMPT_LENGTH = 10_000;
 const MAX_REFERENCES = 10;
-const PRODUCT_REFERENCE_CATEGORY_RANK = new Map(
-  [
-    'SOFA',
-    'BED',
-    'ARMCHAIR',
-    'TABLE',
-    'COFFEE_TABLE',
-    'TV_STAND',
-    'WARDROBE',
-    'DRESSER',
-    'SHELF',
-    'DESK',
-    'CHAIR',
-    'RUG',
-    'LAMP',
-    'DECOR',
-    'MATTRESS',
-    'OTHER',
-  ].map((category, index) => [category, index]),
-);
-
+const TRANSPORT_MAX_ATTEMPTS = 2;
+const DEFAULT_TRANSPORT_RETRY_BASE_DELAY_MS = 250;
+const DEFAULT_HTTP_REQUEST_TIMEOUT_MS = 30_000;
 type YesAiCreateGenerationResponse = {
   success: boolean;
   message: string;
@@ -76,6 +62,17 @@ type YesAiGenerationData = {
   };
 };
 
+export class YesAiProviderError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode?: number,
+    readonly providerCode?: string,
+  ) {
+    super(message);
+    this.name = 'YesAiProviderError';
+  }
+}
+
 @Injectable()
 export class YesAiNanoBananaProvider implements AiProvider {
   providerName = 'NANO_BANANA' as const;
@@ -105,6 +102,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
 
     for (let index = 0; index < input.variantsCount; index += 1) {
       const variantNumber = index + 1;
+      const variantStartedAt = Date.now();
 
       this.logVerbose(
         `YES AI variant ${variantNumber}/${input.variantsCount}: starting create step`,
@@ -115,11 +113,12 @@ export class YesAiNanoBananaProvider implements AiProvider {
         currentStep: `Создаём AI-задачу для варианта ${variantNumber}`,
       });
 
-      const generation = await this.createGeneration({
+      const created = await this.createGeneration({
         config,
         input,
         variantNumber,
       });
+      const generation = created.generation;
 
       const externalJobId = String(generation.id);
 
@@ -133,6 +132,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
         externalJobId,
       });
 
+      const pollStartedAt = Date.now();
       const completedGeneration = await this.pollGeneration({
         config,
         externalJobId,
@@ -140,6 +140,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
         variantIndex: index,
         variantNumber,
       });
+      const pollMs = Date.now() - pollStartedAt;
 
       this.logVerbose(
         `YES AI variant ${variantNumber}/${input.variantsCount}: polling completed externalJobId=${externalJobId}, status=${completedGeneration.status}, hasResultUrl=${Boolean(completedGeneration.result_url)}`,
@@ -153,12 +154,13 @@ export class YesAiNanoBananaProvider implements AiProvider {
         `YES AI variant ${variantNumber}/${input.variantsCount}: downloading and uploading result externalJobId=${externalJobId}`,
       );
 
-      const permanentImageUrl = await this.downloadAndUploadResultImage({
+      const resultTransfer = await this.downloadAndUploadResultImage({
         resultUrl: completedGeneration.result_url,
         customerId: input.customerId,
         generationExternalId: externalJobId,
         variantNumber,
       });
+      const permanentImageUrl = resultTransfer.url;
 
       variants.push(
         this.createGeneratedVariant({
@@ -170,6 +172,9 @@ export class YesAiNanoBananaProvider implements AiProvider {
 
       this.logVerbose(
         `YES AI variant ${variantNumber}/${input.variantsCount}: prepared generated variant externalJobId=${externalJobId}`,
+      );
+      this.logger.log(
+        `YES AI variant completed: externalJobId=${externalJobId}, variant=${variantNumber}/${input.variantsCount}, referencesMs=${created.referencesMs}, createMs=${created.createMs}, pollMs=${pollMs}, downloadMs=${resultTransfer.downloadMs}, uploadMs=${resultTransfer.uploadMs}, totalMs=${Date.now() - variantStartedAt}`,
       );
     }
 
@@ -191,15 +196,33 @@ export class YesAiNanoBananaProvider implements AiProvider {
     config: YesAiNanoBananaConfig;
     input: GenerateDesignInput;
     variantNumber: number;
-  }): Promise<YesAiGenerationData> {
-    const referencesUrls = await this.buildReferencesUrls(input);
+  }): Promise<{
+    generation: YesAiGenerationData;
+    referencesMs: number;
+    createMs: number;
+  }> {
+    const referencesStartedAt = Date.now();
+    const preparedReferences = await this.prepareReferences(input);
+    const referencesUrls = preparedReferences.urls;
+    const referencesMs = Date.now() - referencesStartedAt;
+    const providerPrompt = this.buildProviderPrompt(
+      input,
+      variantNumber,
+      preparedReferences.contractLines,
+    );
+
+    if (input.sourceShell) {
+      this.logger.log(
+        `B2B render request: roomId=${input.b2bRoomId ?? 'unknown'}, roomType=${input.roomType}, products=${input.products.length}, sourceShell=true, shellReferenceIndex=1, promptLength=${providerPrompt.length}, references=${referencesUrls?.length ?? 0}, endpoint=/v2/google/nanobanana/generations, requestMode=references_urls`,
+      );
+    }
 
     this.logVerbose(
-      `YES AI create request started: variant=${variantNumber}, references=${referencesUrls?.length ?? 0}, version=${config.version}, dimensions=${config.dimensions}, resolution=${config.resolution}`,
+      `YES AI create request started: variant=${variantNumber}, references=${referencesUrls?.length ?? 0}, productReferences=${preparedReferences.productReferenceCount}, version=${config.version}, dimensions=${config.dimensions}, resolution=${config.resolution}`,
     );
 
     const startedAt = Date.now();
-    const response = await fetch(
+    const response = await this.fetchWithTransientRetry(
       `${config.baseUrl}/v2/google/nanobanana/generations`,
       {
         method: 'POST',
@@ -209,7 +232,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
         },
         body: JSON.stringify({
           version: config.version,
-          prompt: this.buildProviderPrompt(input, variantNumber),
+          prompt: providerPrompt,
           style: config.style,
           dimensions: config.dimensions,
           resolution: config.resolution,
@@ -219,21 +242,26 @@ export class YesAiNanoBananaProvider implements AiProvider {
           customer_id: this.buildCustomerId(input),
         }),
       },
+      'create',
     );
 
     this.logVerbose(
       `YES AI create response received: variant=${variantNumber}, statusCode=${response.status}, elapsedMs=${Date.now() - startedAt}`,
     );
 
-    const data = (await response.json()) as YesAiCreateGenerationResponse;
+    const data = await this.readJsonResponse<YesAiCreateGenerationResponse>(
+      response,
+    );
 
-    if (!response.ok || !data.success) {
+    if (!response.ok || !data?.success) {
       this.logger.error(
-        `YES AI create generation failed: ${JSON.stringify(data)}`,
+        `YES AI create generation failed: status=${response.status}, code=${data?.message ?? 'invalid_response'}`,
       );
 
-      throw new Error(
-        `YES AI create generation failed: ${data.message ?? response.status}`,
+      throw new YesAiProviderError(
+        `YES AI create generation failed: ${data?.message ?? response.status}`,
+        response.status,
+        data?.message,
       );
     }
 
@@ -243,7 +271,11 @@ export class YesAiNanoBananaProvider implements AiProvider {
       throw new Error('YES AI create response does not contain generation id');
     }
 
-    return generation;
+    return {
+      generation,
+      referencesMs,
+      createMs: Date.now() - startedAt,
+    };
   }
 
   private async pollGeneration({
@@ -327,7 +359,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
     );
 
     const startedAt = Date.now();
-    const response = await fetch(
+    const response = await this.fetchWithTransientRetry(
       `${config.baseUrl}/v2/google/nanobanana/generations/${externalJobId}`,
       {
         method: 'GET',
@@ -336,21 +368,26 @@ export class YesAiNanoBananaProvider implements AiProvider {
           'Content-Type': 'application/json',
         },
       },
+      'status',
     );
 
     this.logVerbose(
       `YES AI status response received: externalJobId=${externalJobId}, statusCode=${response.status}, elapsedMs=${Date.now() - startedAt}`,
     );
 
-    const data = (await response.json()) as YesAiGetGenerationResponse;
+    const data = await this.readJsonResponse<YesAiGetGenerationResponse>(
+      response,
+    );
 
-    if (!response.ok || !data.success) {
+    if (!response.ok || !data?.success) {
       this.logger.error(
-        `YES AI get generation failed: ${JSON.stringify(data)}`,
+        `YES AI get generation failed: status=${response.status}, code=${data?.message ?? 'invalid_response'}`,
       );
 
-      throw new Error(
-        `YES AI get generation failed: ${data.message ?? response.status}`,
+      throw new YesAiProviderError(
+        `YES AI get generation failed: ${data?.message ?? response.status}`,
+        response.status,
+        data?.message,
       );
     }
 
@@ -372,114 +409,275 @@ export class YesAiNanoBananaProvider implements AiProvider {
     }
   }
 
+  private async readJsonResponse<T>(response: Response): Promise<T | null> {
+    const responseText = await response.text();
+
+    try {
+      return JSON.parse(responseText) as T;
+    } catch {
+      return null;
+    }
+  }
+
   private buildProviderPrompt(
     input: GenerateDesignInput,
     variantNumber: number,
+    referenceContractLines: string[] = [],
   ) {
-    const sourceImageInstruction = input.sourceImageUrl
-      ? [
-          'Use the provided room photo as the base reference image.',
-          'Preserve the room geometry, camera angle, windows, walls and proportions.',
-          'Do not change structural layout.',
-        ].join('\n')
-      : [
-          'Create a realistic interior scene from scratch.',
-          'Use natural perspective and realistic room proportions.',
-        ].join('\n');
+    const sourceImageInstruction = input.sourceShell
+      ? null
+      : input.sourceImageUrl
+        ? 'SOURCE_ROOM is strict: preserve camera, walls, windows, doors, floor, ceiling and proportions.'
+      : 'Create realistic room geometry with natural perspective and proportions.';
 
-    return [
+    const essentialPrompt = [
       input.prompt,
+      ...(referenceContractLines.length
+        ? ['', 'ATTACHED REFERENCE IMAGE MAP:', ...referenceContractLines]
+        : []),
       '',
       sourceImageInstruction,
       '',
-      `Generate interior design variant ${variantNumber}.`,
-      'The result must be photorealistic, cozy, commercially attractive, and suitable for an online furniture marketplace.',
-      'Do not add text, watermark, logo, distorted furniture, broken perspective, extra doors, broken windows or unreadable objects.',
-      input.negativePrompt ? `Negative prompt: ${input.negativePrompt}` : null,
+      `Generate interior variant ${variantNumber}.`,
+      'Photorealistic, residential, commercially attractive. No text, watermark, logo, broken geometry or distorted furniture.',
     ]
       .filter(Boolean)
       .join('\n');
+
+    if (essentialPrompt.length > MAX_PROVIDER_PROMPT_LENGTH) {
+      if (input.sourceShell) {
+        throw new Error(
+          `B2B provider prompt exceeds ${MAX_PROVIDER_PROMPT_LENGTH} character limit: ${essentialPrompt.length}`,
+        );
+      }
+      const fixedTail = [
+        '',
+        sourceImageInstruction,
+        '',
+        `Generate interior variant ${variantNumber}.`,
+        'Photorealistic residential interior. No text, watermark, logo, broken geometry or distorted furniture.',
+      ].join('\n');
+      const maxBaseLength = Math.max(
+        0,
+        MAX_PROVIDER_PROMPT_LENGTH - fixedTail.length - 1,
+      );
+      return `${input.prompt.slice(0, maxBaseLength).trimEnd()}\n${fixedTail}`;
+    }
+
+    if (!input.negativePrompt) return essentialPrompt;
+
+    const negativePrefix = '\nNegative prompt: ';
+    const remainingLength =
+      MAX_PROVIDER_PROMPT_LENGTH -
+      essentialPrompt.length -
+      negativePrefix.length;
+
+    if (remainingLength <= 0) return essentialPrompt;
+
+    return `${essentialPrompt}${negativePrefix}${input.negativePrompt.slice(
+      0,
+      remainingLength,
+    )}`;
   }
 
-  private async buildReferencesUrls(
-    input: GenerateDesignInput,
-  ): Promise<string[] | undefined> {
+  private async prepareReferences(input: GenerateDesignInput): Promise<{
+    urls?: string[];
+    contractLines: string[];
+    productReferenceCount: number;
+  }> {
     const references: string[] = [];
+    const contractLines: string[] = [];
 
     if (input.sourceImageUrl) {
       references.push(input.sourceImageUrl);
+      contractLines.push(
+        input.sourceShell
+          ? 'REF_1=SOURCE_SHELL;geometry/camera/openings;primary;strict;not-product.'
+          : 'REF_1=SOURCE_ROOM; geometry/camera/openings only; not a product.',
+      );
     }
 
-    const productCandidates = input.products
-      .map((product, originalIndex) => ({ product, originalIndex }))
-      .sort((left, right) => {
-        const leftRank =
-          PRODUCT_REFERENCE_CATEGORY_RANK.get(left.product.category) ??
-          Number.MAX_SAFE_INTEGER;
-        const rightRank =
-          PRODUCT_REFERENCE_CATEGORY_RANK.get(right.product.category) ??
-          Number.MAX_SAFE_INTEGER;
+    const originalIndexById = new Map(
+      input.products.map((product, index) => [product.id, index]),
+    );
+    const availableProductSlots = Math.max(
+      0,
+      MAX_REFERENCES - references.length,
+    );
 
-        return leftRank - rightRank || left.originalIndex - right.originalIndex;
-      })
-      .map(({ product }) => ({
-        productId: product.id,
+    const productCandidates = input.products
+      .map((product) => ({
+        product,
+        originalIndex: originalIndexById.get(product.id) ?? 0,
+        profile: getProductRenderProfile(product),
         sourceUrl: product.imageUrls?.[0],
       }))
-      .filter(
-        (candidate): candidate is { productId: string; sourceUrl: string } =>
-          Boolean(candidate.sourceUrl),
-      )
-      .slice(0, MAX_PRODUCT_REFERENCES)
+      .filter((candidate) => Boolean(candidate.sourceUrl))
+      .sort((left, right) => {
+        const priorityDelta =
+          getRenderPriorityRank(left.profile.priority) -
+          getRenderPriorityRank(right.profile.priority);
+        return priorityDelta || left.originalIndex - right.originalIndex;
+      })
       .filter(
         (candidate, index, candidates) =>
           candidates.findIndex(
             (other) => other.sourceUrl === candidate.sourceUrl,
           ) === index,
-      );
-
-    const cachedProductReferences = (
-      await Promise.all(
-        productCandidates.map(async ({ productId, sourceUrl }) => {
-          try {
-            return await this.aiReferenceImageCacheService.getOrCreateReference(
-              { productId, sourceUrl },
-            );
-          } catch (error) {
-            const reason =
-              error instanceof Error ? error.message : String(error);
-
-            this.logger.warn(
-              `Product reference image skipped: productId=${productId}, reason=${reason}`,
-            );
-
-            return undefined;
-          }
-        }),
       )
-    ).filter((url): url is string => Boolean(url));
+      .slice(0, availableProductSlots);
 
-    references.push(...cachedProductReferences);
+    const resolvedProductReferences = await Promise.all(
+      productCandidates.map(async (candidate) => {
+        try {
+          const url =
+            await this.aiReferenceImageCacheService.getOrCreateReference({
+              productId: candidate.product.id,
+              sourceUrl: candidate.sourceUrl!,
+            });
+          return { ...candidate, url };
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : String(error);
+          this.logger.warn(
+            `Product reference image skipped: productId=${candidate.product.id}, reason=${reason}`,
+          );
+          return undefined;
+        }
+      }),
+    );
 
-    const uniqueReferences = Array.from(new Set(references)).slice(
+    for (const resolved of resolvedProductReferences) {
+      if (!resolved) continue;
+      if (references.includes(resolved.url)) continue;
+
+      references.push(resolved.url);
+      const referenceIndex = references.length;
+      const productLabel = `PRODUCT_${resolved.originalIndex + 1}`;
+      contractLines.push(
+        [
+          `REF_${referenceIndex}=${productLabel}`,
+          `cat=${resolved.product.category}`,
+          `sub=${resolved.profile.subtype}`,
+          'strict',
+          'once',
+          'no-duplicate',
+        ].join(';'),
+      );
+    }
+
+    const productReferenceCount = Math.max(
       0,
-      MAX_REFERENCES,
+      references.length - (input.sourceImageUrl ? 1 : 0),
     );
 
     this.logVerbose(
-      `YES AI references prepared: total=${uniqueReferences.length}, hasSourceImage=${Boolean(input.sourceImageUrl)}, productReferences=${Math.max(
-        0,
-        uniqueReferences.filter(
-          (reference) => reference !== input.sourceImageUrl,
-        ).length,
-      )}`,
+      `YES AI references prepared: total=${references.length}, hasSourceImage=${Boolean(input.sourceImageUrl)}, productReferences=${productReferenceCount}, selectedProducts=${input.products.length}`,
     );
 
-    if (uniqueReferences.length === 0) {
-      return undefined;
+    if (references.length === 0) {
+      return { urls: undefined, contractLines: [], productReferenceCount: 0 };
     }
 
-    return uniqueReferences;
+    return {
+      urls: references,
+      contractLines,
+      productReferenceCount,
+    };
+  }
+
+  private async fetchWithTransientRetry(
+    url: string,
+    init: RequestInit,
+    operation: 'create' | 'status',
+  ) {
+    const timeoutMs = this.getPositiveIntegerEnv(
+      'YESAI_HTTP_REQUEST_TIMEOUT_MS',
+      DEFAULT_HTTP_REQUEST_TIMEOUT_MS,
+    );
+    const retryBaseDelayMs = this.getNonNegativeIntegerEnv(
+      'YESAI_TRANSPORT_RETRY_BASE_DELAY_MS',
+      DEFAULT_TRANSPORT_RETRY_BASE_DELAY_MS,
+    );
+
+    for (let attempt = 1; attempt <= TRANSPORT_MAX_ATTEMPTS; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const response = await fetch(url, {
+          ...init,
+          signal: controller.signal,
+        });
+        if (
+          attempt < TRANSPORT_MAX_ATTEMPTS &&
+          (response.status === 429 || response.status >= 500)
+        ) {
+          this.logger.warn(
+            `YES AI transport retry: operation=${operation}, attempt=${attempt}/${TRANSPORT_MAX_ATTEMPTS}, status=${response.status}, retryInMs=${retryBaseDelayMs * attempt}`,
+          );
+          await this.sleep(retryBaseDelayMs * attempt);
+          continue;
+        }
+        return response;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          attempt === TRANSPORT_MAX_ATTEMPTS ||
+          !this.isTransientTransportError(error)
+        ) {
+          throw error;
+        }
+        const cause = this.transportCause(error);
+        const retryInMs = retryBaseDelayMs * attempt;
+        this.logger.warn(
+          `YES AI transport retry: operation=${operation}, attempt=${attempt}/${TRANSPORT_MAX_ATTEMPTS}, causeName=${cause.name}, causeCode=${cause.code}, causeMessage=${cause.message}, retryInMs=${retryInMs}`,
+        );
+        await this.sleep(retryInMs);
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    throw new Error('Unreachable YES AI transport retry state');
+  }
+
+  private isTransientTransportError(error: unknown) {
+    if (!(error instanceof Error)) return false;
+    const cause = this.transportCause(error);
+    return (
+      error.name === 'AbortError' ||
+      error.name === 'TimeoutError' ||
+      error.message.toLowerCase().includes('fetch failed') ||
+      ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN'].includes(
+        cause.code,
+      )
+    );
+  }
+
+  private transportCause(error: Error) {
+    const cause = (error as Error & {
+      cause?: { code?: unknown; name?: unknown; message?: unknown };
+    }).cause;
+    return {
+      name:
+        typeof cause?.name === 'string'
+          ? cause.name
+          : error.name || 'Error',
+      code: typeof cause?.code === 'string' ? cause.code : 'unknown',
+      message:
+        typeof cause?.message === 'string'
+          ? cause.message
+          : error.message || 'unknown',
+    };
+  }
+
+  private getPositiveIntegerEnv(name: string, fallback: number) {
+    const parsed = Number.parseInt(process.env[name] ?? '', 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  }
+
+  private getNonNegativeIntegerEnv(name: string, fallback: number) {
+    const parsed = Number.parseInt(process.env[name] ?? '', 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
   }
 
   private buildCustomerId(input: GenerateDesignInput): string {
@@ -584,11 +782,13 @@ export class YesAiNanoBananaProvider implements AiProvider {
       variantNumber,
     });
 
+    const downloadStartedAt = Date.now();
     const { buffer, contentType } = await this.downloadResultImageBuffer({
       resultUrl: downloadUrl,
       generationExternalId,
       variantNumber,
     });
+    const downloadMs = Date.now() - downloadStartedAt;
 
     if (buffer.length === 0) {
       throw new Error('YES AI result image is empty');
@@ -606,6 +806,7 @@ export class YesAiNanoBananaProvider implements AiProvider {
       `YES AI result upload started: externalJobId=${generationExternalId}, variant=${variantNumber}, extension=${extension}, bytes=${buffer.length}`,
     );
 
+    const uploadStartedAt = Date.now();
     const uploaded = await this.storageService.uploadBuffer({
       buffer,
       contentType,
@@ -616,12 +817,13 @@ export class YesAiNanoBananaProvider implements AiProvider {
         this.sanitizePathPart(generationExternalId),
       ].join('/'),
     });
+    const uploadMs = Date.now() - uploadStartedAt;
 
     this.logVerbose(
       `Uploaded YES AI result image to S3: variant=${variantNumber}, key=${uploaded.key}`,
     );
 
-    return uploaded.url;
+    return { url: uploaded.url, downloadMs, uploadMs };
   }
 
   private async downloadResultImageBuffer({

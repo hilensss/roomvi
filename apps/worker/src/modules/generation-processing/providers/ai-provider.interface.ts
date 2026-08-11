@@ -16,6 +16,8 @@ export type GenerateDesignInput = {
   products: Product[];
   variantsCount: number;
   sourceImageUrl?: string;
+  sourceShell?: boolean;
+  b2bRoomId?: string;
   customerId: string;
   onProgress?: (progress: AiGenerationProgress) => Promise<void> | void;
 };

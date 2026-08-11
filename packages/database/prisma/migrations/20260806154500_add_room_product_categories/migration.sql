@@ -1,0 +1,4 @@
+ALTER TYPE "ProductCategory" ADD VALUE 'MIRROR';
+ALTER TYPE "ProductCategory" ADD VALUE 'BENCH';
+ALTER TYPE "ProductCategory" ADD VALUE 'SHOE_CABINET';
+ALTER TYPE "ProductCategory" ADD VALUE 'HANGER';

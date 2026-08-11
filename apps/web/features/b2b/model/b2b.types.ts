@@ -89,6 +89,9 @@ export type B2BRoom = {
   sortOrder: number;
   isIncluded: boolean;
   openings: B2BRoomOpening[];
+  roomProject?: {
+    generationJobs: B2BProjectGenerationJob[];
+  } | null;
 };
 
 type B2BProjectBase = {
@@ -211,10 +214,15 @@ export type ReplaceB2BRoomsInput = {
   >;
 };
 
-export type StartB2BGenerationResponse = {
-  project: { id: string };
-  job: { id: string; status: GenerationJobStatus };
-};
+export type StartB2BGenerationResponse =
+  | {
+      project: { id: string };
+      job: { id: string; status: GenerationJobStatus };
+    }
+  | {
+      project: { id: string };
+      jobs: Array<{ id: string; status: GenerationJobStatus }>;
+    };
 
 export type ConfirmB2BRoomsInput = {
   projectId: string;

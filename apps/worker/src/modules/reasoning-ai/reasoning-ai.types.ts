@@ -10,6 +10,12 @@ export type StructuredReasoningRequest = {
   userPrompt: string;
   jsonSchema: Record<string, unknown>;
   attachments: ReasoningAttachment[];
+  model?: string;
+  reasoningEffort?: string;
+  timeoutMs?: number;
+  maxOutputTokens?: number;
+  maxAttempts?: number;
+  apiMode?: 'responses' | 'chat_completions';
 };
 
 export type StructuredReasoningResult = {

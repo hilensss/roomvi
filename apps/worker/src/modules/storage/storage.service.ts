@@ -4,8 +4,11 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+
+const MAX_UPLOAD_ATTEMPTS = 3;
+const UPLOAD_RETRY_DELAY_MS = 250;
 
 type UploadBufferInput = {
   buffer: Buffer;
@@ -17,6 +20,8 @@ type UploadBufferInput = {
 
 @Injectable()
 export class StorageService {
+  private readonly logger = new Logger(StorageService.name);
+
   private readonly client = new S3Client({
     region: process.env.S3_REGION ?? 'ru-central1',
     endpoint: process.env.S3_ENDPOINT,
@@ -36,15 +41,32 @@ export class StorageService {
 
     const key = input.key ?? `${input.folder}/${randomUUID()}.${extension}`;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: input.buffer,
-        ContentType: input.contentType,
-        CacheControl: 'public, max-age=31536000, immutable',
-      }),
-    );
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: input.buffer,
+      ContentType: input.contentType,
+      CacheControl: 'public, max-age=31536000, immutable',
+    });
+
+    for (let attempt = 1; attempt <= MAX_UPLOAD_ATTEMPTS; attempt += 1) {
+      try {
+        await this.client.send(command);
+        break;
+      } catch (error) {
+        if (
+          attempt === MAX_UPLOAD_ATTEMPTS ||
+          !this.isRetryableUploadError(error)
+        ) {
+          throw error;
+        }
+
+        this.logger.warn(
+          `S3 upload returned a transient response; retrying key=${key}, attempt=${attempt + 1}/${MAX_UPLOAD_ATTEMPTS}`,
+        );
+        await this.sleep(UPLOAD_RETRY_DELAY_MS * attempt);
+      }
+    }
 
     return {
       key,
@@ -125,6 +147,32 @@ export class StorageService {
     if (contentType.includes('jpg')) return 'jpg';
 
     return 'png';
+  }
+
+  private isRetryableUploadError(error: unknown) {
+    if (!(error instanceof Error)) return false;
+
+    const details = error as Error & {
+      $metadata?: { httpStatusCode?: number };
+      $response?: { statusCode?: number };
+      $retryable?: unknown;
+    };
+    const statusCode =
+      details.$metadata?.httpStatusCode ?? details.$response?.statusCode;
+    const message = error.message.toLowerCase();
+
+    return (
+      statusCode === 429 ||
+      (statusCode !== undefined && statusCode >= 500) ||
+      Boolean(details.$retryable) ||
+      message.includes('deserialization error') ||
+      message.includes('expected closing tag') ||
+      error.name.toLowerCase().includes('timeout')
+    );
+  }
+
+  private sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private getRequiredEnv(name: string) {

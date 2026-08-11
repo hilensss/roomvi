@@ -1,0 +1,17 @@
+.git
+.github
+.next
+.turbo
+dist
+node_modules
+coverage
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.production.example
+graphify-out
+.superpowers
+docs
+**/*.zip

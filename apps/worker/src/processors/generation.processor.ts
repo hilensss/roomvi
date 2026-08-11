@@ -9,8 +9,28 @@ type GenerationQueuePayload =
   | { generationJobId: string }
   | { analysisRunId: string };
 
+const DEFAULT_GENERATION_WORKER_CONCURRENCY = 2;
+const MAX_GENERATION_WORKER_CONCURRENCY = 4;
+
+export function getGenerationWorkerConcurrency(
+  rawValue = process.env.GENERATION_WORKER_CONCURRENCY,
+) {
+  const configured = Number(rawValue ?? DEFAULT_GENERATION_WORKER_CONCURRENCY);
+
+  if (!Number.isInteger(configured)) {
+    return DEFAULT_GENERATION_WORKER_CONCURRENCY;
+  }
+
+  return Math.min(
+    MAX_GENERATION_WORKER_CONCURRENCY,
+    Math.max(1, configured),
+  );
+}
+
 @Injectable()
-@Processor(GENERATION_QUEUE_NAME)
+@Processor(GENERATION_QUEUE_NAME, {
+  concurrency: getGenerationWorkerConcurrency(),
+})
 export class GenerationProcessor extends WorkerHost {
   private readonly logger = new Logger(GenerationProcessor.name);
   constructor(

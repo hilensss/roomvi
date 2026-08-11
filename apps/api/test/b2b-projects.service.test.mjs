@@ -501,6 +501,7 @@ test('startGeneration retries a failed project with the saved selection', async 
         assert.deepEqual(args.where.status.in, [
           B2BProjectStatus.READY_TO_GENERATE,
           B2BProjectStatus.FAILED,
+          B2BProjectStatus.PARTIALLY_COMPLETED,
         ]);
         return { count: 1 };
       },
@@ -574,7 +575,12 @@ test('downloadVariant proxies only a variant belonging to the B2B project', asyn
 
     assert.deepEqual(variantQuery.where, {
       id: 'variant-1',
-      roomProject: { b2bProject: { id: 'b2b-project-1' } },
+      roomProject: {
+        OR: [
+          { b2bProject: { id: 'b2b-project-1' } },
+          { b2bRoom: { b2bProjectId: 'b2b-project-1' } },
+        ],
+      },
     });
     assert.equal(result.contentType, 'image/jpeg');
     assert.equal(result.fileName, 'roomvi-variant-1.jpg');

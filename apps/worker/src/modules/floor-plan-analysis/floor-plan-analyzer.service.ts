@@ -56,8 +56,11 @@ export class FloorPlanAnalyzerService {
       taskName: 'floor_plan_analysis',
       systemPrompt: [
         'You analyze architectural apartment floor plans.',
-        'Extract every enclosed room polygon, dimensions, likely room type, windows, and doors.',
-        'Coordinates are normalized page coordinates from 0 to 1, measured from the top-left.',
+        'Extract every enclosed room interior, dimensions, likely room type, windows, and doors.',
+        'Use the full raster image as the coordinate space: x=0 is its left edge, x=1 its right edge, y=0 its top edge, and y=1 its bottom edge. Do not normalize against the apartment bounding box or any cropped region.',
+        'Each polygon must follow the visible interior boundary along the inner faces of walls, with vertices at inner wall corners. Polygons are not bounding boxes.',
+        'Do not merge spaces separated by a wall. Return each enclosed room exactly once. Room polygons must not overlap; adjacent rooms may only share a boundary.',
+        'Preserve L-shaped and other non-rectangular interiors with enough vertices. Exclude wall thickness, dimension lines, labels, furniture symbols, and door-swing arcs from room interiors.',
         'Opening wallSegmentIndex refers to polygon point i through point (i + 1) modulo point count.',
         'Do not invent labels or exact measurements that are not visible; use null and lower confidence.',
       ].join(' '),
@@ -66,6 +69,7 @@ export class FloorPlanAnalyzerService {
         'Use centimetres for width, depth, ceiling height and square metres for area.',
         'Use Russian suggested room names.',
         'Preserve windows and doors on the wall where they appear.',
+        'Before responding, verify that every polygon follows inner wall corners, no separated rooms were merged, and no two room interiors overlap.',
       ].join(' '),
       jsonSchema: floorPlanAnalysisJsonSchema as unknown as Record<
         string,

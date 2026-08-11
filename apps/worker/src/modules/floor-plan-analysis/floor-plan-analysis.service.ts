@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   B2BAnalysisStatus,
   B2BProjectStatus,
@@ -8,11 +8,14 @@ import {
 } from '@roomvi/database';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ReasoningAiProviderError } from '../reasoning-ai/reasoning-ai-provider.interface.js';
 import { FloorPlanAnalyzerService } from './floor-plan-analyzer.service.js';
 import { FloorPlanAssetService } from './floor-plan-asset.service.js';
 
 @Injectable()
 export class FloorPlanAnalysisService {
+  private readonly logger = new Logger(FloorPlanAnalysisService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly assetService: FloorPlanAssetService,
@@ -172,7 +175,11 @@ export class FloorPlanAnalysisService {
           throw new Error('Floor-plan analysis project state changed');
         }
       });
-    } catch {
+    } catch (error) {
+      const errorMessage = this.publicErrorMessage(error);
+      this.logger.error(
+        `Floor-plan analysis failed: analysisRunId=${analysisRunId}, projectId=${run.b2bProjectId}, ${this.errorDiagnostic(error)}`,
+      );
       if (!attempt.isFinalAttempt) {
         await this.prisma.floorPlanAnalysisRun.updateMany({
           where: {
@@ -189,7 +196,7 @@ export class FloorPlanAnalysisService {
             completedAt: null,
           },
         });
-        throw new Error('Floor-plan analysis failed');
+        throw new Error(errorMessage);
       }
       await this.prisma.$transaction(async (tx) => {
         const failed = await tx.floorPlanAnalysisRun.updateMany({
@@ -203,7 +210,7 @@ export class FloorPlanAnalysisService {
             processingToken: null,
             progress: 100,
             currentStep: 'Анализ не выполнен',
-            errorMessage: 'Floor-plan analysis failed',
+            errorMessage,
             completedAt: new Date(),
           },
         });
@@ -216,7 +223,28 @@ export class FloorPlanAnalysisService {
           data: { status: B2BProjectStatus.FAILED },
         });
       });
-      throw new Error('Floor-plan analysis failed');
+      throw new Error(errorMessage);
     }
+  }
+
+  private publicErrorMessage(error: unknown) {
+    return error instanceof ReasoningAiProviderError
+      ? error.message
+      : 'Floor-plan analysis failed';
+  }
+
+  private errorDiagnostic(error: unknown) {
+    if (error instanceof ReasoningAiProviderError) {
+      return [
+        'provider=openai',
+        `status=${error.status ?? 'unknown'}`,
+        `code=${error.code ?? 'unknown'}`,
+        `retryable=${error.retryable}`,
+        `reason=${error.message}`,
+      ].join(', ');
+    }
+    return `reason=Floor-plan analysis failed, errorType=${
+      error instanceof Error ? error.name : typeof error
+    }`;
   }
 }

@@ -187,7 +187,7 @@ export class GuestService {
       httpOnly: true,
       secure: this.configService.get<string>('NODE_ENV') === 'production',
       sameSite: 'lax',
-      path: '/',
+      path: this.configService.get<string>('COOKIE_PATH') ?? '/',
     };
   }
   private calculateGuestSessionExpiresAt() {

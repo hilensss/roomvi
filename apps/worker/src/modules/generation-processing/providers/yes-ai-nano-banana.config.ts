@@ -13,16 +13,6 @@ export type YesAiNanoBananaConfig = {
 export function getYesAiNanoBananaConfig(): YesAiNanoBananaConfig {
   const apiKey = process.env.YESAI_API_KEY;
 
-  console.log('[YESAI ENV CHECK]', {
-    hasKey: Boolean(apiKey),
-
-    length: apiKey?.length,
-
-    startsWith: apiKey?.slice(0, 6),
-
-    hasBearerPrefix: apiKey?.startsWith('Bearer '),
-  });
-
   if (!apiKey) {
     throw new Error('YESAI_API_KEY is not configured');
   }

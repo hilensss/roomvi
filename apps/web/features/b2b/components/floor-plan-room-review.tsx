@@ -48,7 +48,10 @@ type EditableRoom = Omit<
   ReplaceB2BRoomsInput['rooms'][number],
   'id'
 > & { id: string };
-type DragTarget = { roomId: string; pointIndex: number } | null;
+type DragTarget =
+  | { kind: 'point'; roomId: string; pointIndex: number }
+  | { kind: 'opening'; roomId: string; openingIndex: number }
+  | null;
 
 const inputClassName =
   'h-10 w-full rounded-lg border border-line/60 bg-white px-3 text-sm text-ink outline-none focus:border-brand';
@@ -73,28 +76,13 @@ export function FloorPlanRoomReview({
 
   const selectedRoom =
     rooms.find((room) => room.id === selectedRoomId) ?? rooms[0];
-  const canConfirm = useMemo(
-    () =>
-      rooms.some((room) => room.isIncluded) &&
-      rooms
-        .filter((room) => room.isIncluded)
-        .every(
-          (room) =>
-            Boolean(room.name.trim()) &&
-            Boolean(room.roomType) &&
-            Boolean(room.widthCm && room.widthCm >= 80) &&
-            Boolean(room.depthCm && room.depthCm >= 80) &&
-            room.polygon.length >= 3 &&
-            room.openings.every(
-              (opening) =>
-                opening.wallSegmentIndex >= 0 &&
-                opening.wallSegmentIndex < room.polygon.length &&
-                opening.positionRatio >= 0 &&
-                opening.positionRatio <= 1,
-            ),
-        ),
+  const includedRoomCount = rooms.filter((room) => room.isIncluded).length;
+  const confirmationIssues = useMemo(
+    () => getRoomConfirmationIssues(rooms),
     [rooms],
   );
+  const canConfirm =
+    includedRoomCount > 0 && confirmationIssues.length === 0;
 
   function setRooms(
     update: EditableRoom[] | ((current: EditableRoom[]) => EditableRoom[]),
@@ -151,6 +139,11 @@ export function FloorPlanRoomReview({
         },
       ],
     });
+  }
+
+  function addContourPoint() {
+    if (!selectedRoom || selectedRoom.polygon.length >= 80) return;
+    updateSelected(splitLongestPolygonSegment(selectedRoom));
   }
 
   function addRoom() {
@@ -268,12 +261,29 @@ export function FloorPlanRoomReview({
       current.map((room) =>
         room.id !== dragTarget.roomId
           ? room
-          : {
-              ...room,
-              polygon: room.polygon.map((point, index) =>
-                index === dragTarget.pointIndex ? { x, y } : point,
-              ),
-            },
+          : dragTarget.kind === 'point'
+            ? {
+                ...room,
+                polygon: room.polygon.map((point, index) =>
+                  index === dragTarget.pointIndex ? { x, y } : point,
+                ),
+              }
+            : {
+                ...room,
+                openings: room.openings.map((opening, index) =>
+                  index === dragTarget.openingIndex
+                    ? {
+                        ...opening,
+                        ...nearestOpeningPlacement(
+                          room.polygon,
+                          { x, y },
+                          bounds.width,
+                          bounds.height,
+                        ),
+                      }
+                    : opening,
+                ),
+              },
       ),
     );
   }
@@ -287,7 +297,8 @@ export function FloorPlanRoomReview({
             Комнаты, размеры и проёмы
           </h2>
           <p className="mt-2 text-sm text-ink-soft">
-            Перетаскивайте точки контура или задавайте координаты вручную.
+            Перетаскивайте точки контура, окна и двери или задавайте параметры
+            вручную.
           </p>
         </div>
         <button
@@ -300,7 +311,7 @@ export function FloorPlanRoomReview({
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,0.7fr)]">
-        <div className="relative overflow-hidden rounded-card border border-line/50 bg-white">
+        <div className="relative self-start overflow-hidden rounded-card border border-line/50 bg-white">
           {project.sourcePlanFileId ? (
             // The SVG uses the same normalized 0..1 page space as the API.
             // eslint-disable-next-line @next/next/no-img-element
@@ -341,6 +352,9 @@ export function FloorPlanRoomReview({
                     return (
                       <circle
                         key={opening.id ?? `${room.id}-opening-${index}`}
+                        aria-label={`Переместить ${
+                          opening.kind === 'WINDOW' ? 'окно' : 'дверь'
+                        } ${index + 1}`}
                         cx={point.x * 1000}
                         cy={point.y * 1000}
                         r={opening.kind === 'WINDOW' ? 11 : 9}
@@ -348,6 +362,19 @@ export function FloorPlanRoomReview({
                         stroke="white"
                         strokeWidth={3}
                         vectorEffect="non-scaling-stroke"
+                        className="cursor-grab"
+                        onPointerDown={(event) => {
+                          event.stopPropagation();
+                          setSelectedRoomId(room.id);
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId,
+                          );
+                          setDragTarget({
+                            kind: 'opening',
+                            roomId: room.id,
+                            openingIndex: index,
+                          });
+                        }}
                       />
                     );
                   })}
@@ -369,6 +396,7 @@ export function FloorPlanRoomReview({
                               event.pointerId,
                             );
                             setDragTarget({
+                              kind: 'point',
                               roomId: room.id,
                               pointIndex,
                             });
@@ -468,7 +496,7 @@ export function FloorPlanRoomReview({
                   onChange={(widthCm) => updateSelected({ widthCm })}
                 />
                 <NumberField
-                  label="Глубина, см"
+                  label="Длина, см"
                   value={selectedRoom.depthCm}
                   onChange={(depthCm) => updateSelected({ depthCm })}
                 />
@@ -486,6 +514,11 @@ export function FloorPlanRoomReview({
                     updateSelected({ ceilingHeightCm })
                   }
                 />
+                <p className="text-xs leading-relaxed text-ink-soft sm:col-span-2">
+                  Ширина и длина — размеры комнаты по двум сторонам на плане.
+                  Например, размер 3 488 означает примерно 349 см. Площадь
+                  можно не заполнять.
+                </p>
               </div>
 
               {selectedRoom.recognitionNotes ? (
@@ -501,19 +534,33 @@ export function FloorPlanRoomReview({
               ) : null}
 
               <div className="mt-5 border-t border-line/40 pt-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-3">
                   <h3 className="text-sm font-semibold text-ink">
                     Точки контура
                   </h3>
-                  <button
-                    type="button"
-                    onClick={deleteSelectedRoom}
-                    disabled={rooms.length <= 1}
-                    className="text-xs text-brand disabled:opacity-35"
-                  >
-                    Удалить комнату
-                  </button>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={addContourPoint}
+                      disabled={selectedRoom.polygon.length >= 80}
+                      className="rounded-pill border border-line/60 px-3 py-1.5 text-xs font-medium text-ink hover:border-brand hover:text-brand disabled:opacity-35"
+                    >
+                      Добавить точку контура
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deleteSelectedRoom}
+                      disabled={rooms.length <= 1}
+                      className="text-xs text-brand disabled:opacity-35"
+                    >
+                      Удалить комнату
+                    </button>
+                  </div>
                 </div>
+                <p className="mt-2 text-xs leading-relaxed text-ink-soft">
+                  Новая точка появится в середине самой длинной стороны.
+                  Перетащите её в нужный угол.
+                </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {selectedRoom.polygon.map((point, index) => (
                     <div
@@ -661,9 +708,33 @@ export function FloorPlanRoomReview({
       ) : null}
 
       <div className="sticky bottom-4 mt-6 flex flex-col justify-between gap-3 rounded-card border border-line/60 bg-white/95 p-4 shadow-float backdrop-blur sm:flex-row sm:items-center">
-        <span className="text-sm text-ink-soft">
-          Включено комнат: {rooms.filter((room) => room.isIncluded).length}
-        </span>
+        <div className="text-sm text-ink-soft">
+          <p>Включено комнат: {includedRoomCount}</p>
+          {includedRoomCount === 0 ? (
+            <p className="mt-1 text-amber-700">
+              Для подтверждения включите хотя бы одну комнату.
+            </p>
+          ) : confirmationIssues.length > 0 ? (
+            <div className="mt-1 text-amber-700">
+              <p>Для подтверждения заполните:</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                {confirmationIssues.map((issue) => (
+                  <li key={issue.roomId}>
+                    {issue.roomName} — {issue.fields.join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : dirty ? (
+            <p className="mt-1 text-amber-700">
+              Сначала сохраните внесённые изменения.
+            </p>
+          ) : (
+            <p className="mt-1 text-emerald-700">
+              Все обязательные данные заполнены.
+            </p>
+          )}
+        </div>
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
@@ -689,6 +760,40 @@ export function FloorPlanRoomReview({
       </div>
     </section>
   );
+}
+
+function getRoomConfirmationIssues(rooms: EditableRoom[]) {
+  return rooms.flatMap((room, index) => {
+    if (!room.isIncluded) return [];
+
+    const fields: string[] = [];
+    if (!room.name.trim()) fields.push('название');
+    if (!room.roomType) fields.push('тип комнаты');
+    if (room.widthCm === null || room.widthCm < 80) fields.push('ширина');
+    if (room.depthCm === null || room.depthCm < 80) fields.push('длина');
+    if (room.polygon.length < 3) fields.push('контур');
+    if (
+      room.openings.some(
+        (opening) =>
+          opening.wallSegmentIndex < 0 ||
+          opening.wallSegmentIndex >= room.polygon.length ||
+          opening.positionRatio < 0 ||
+          opening.positionRatio > 1,
+      )
+    ) {
+      fields.push('окна и двери');
+    }
+
+    return fields.length > 0
+      ? [
+          {
+            roomId: room.id,
+            roomName: room.name.trim() || `Комната ${index + 1}`,
+            fields,
+          },
+        ]
+      : [];
+  });
 }
 
 function toEditableRoom(room: B2BRoom): EditableRoom {
@@ -717,10 +822,12 @@ function toServerRoom(
     ...room,
     ...(isUuid(room.id) ? { id: room.id } : { id: undefined }),
     openings: room.openings.map((opening) => ({
-      ...opening,
-      ...(opening.id && isUuid(opening.id)
-        ? { id: opening.id }
-        : { id: undefined }),
+      ...(opening.id && isUuid(opening.id) ? { id: opening.id } : {}),
+      kind: opening.kind,
+      wallSegmentIndex: opening.wallSegmentIndex,
+      positionRatio: opening.positionRatio,
+      widthCm: opening.widthCm,
+      recognitionConfidence: opening.recognitionConfidence,
     })),
   };
 }
@@ -729,6 +836,90 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value,
   );
+}
+
+function splitLongestPolygonSegment(room: EditableRoom) {
+  let longestSegmentIndex = 0;
+  let longestSegmentLength = -1;
+
+  room.polygon.forEach((start, index) => {
+    const end = room.polygon[(index + 1) % room.polygon.length];
+    const length = (end.x - start.x) ** 2 + (end.y - start.y) ** 2;
+    if (length > longestSegmentLength) {
+      longestSegmentIndex = index;
+      longestSegmentLength = length;
+    }
+  });
+
+  const start = room.polygon[longestSegmentIndex];
+  const end = room.polygon[(longestSegmentIndex + 1) % room.polygon.length];
+  const insertIndex = longestSegmentIndex + 1;
+  const polygon = [
+    ...room.polygon.slice(0, insertIndex),
+    { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 },
+    ...room.polygon.slice(insertIndex),
+  ];
+  const openings = room.openings.map((opening) => {
+    if (opening.wallSegmentIndex < longestSegmentIndex) return opening;
+    if (opening.wallSegmentIndex > longestSegmentIndex) {
+      return {
+        ...opening,
+        wallSegmentIndex: opening.wallSegmentIndex + 1,
+      };
+    }
+    if (opening.positionRatio <= 0.5) {
+      return { ...opening, positionRatio: opening.positionRatio * 2 };
+    }
+    return {
+      ...opening,
+      wallSegmentIndex: longestSegmentIndex + 1,
+      positionRatio: (opening.positionRatio - 0.5) * 2,
+    };
+  });
+
+  return { polygon, openings };
+}
+
+function nearestOpeningPlacement(
+  polygon: EditableRoom['polygon'],
+  point: { x: number; y: number },
+  width: number,
+  height: number,
+) {
+  let wallSegmentIndex = 0;
+  let positionRatio = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  const pointerX = point.x * width;
+  const pointerY = point.y * height;
+
+  polygon.forEach((start, index) => {
+    const end = polygon[(index + 1) % polygon.length];
+    const startX = start.x * width;
+    const startY = start.y * height;
+    const segmentX = (end.x - start.x) * width;
+    const segmentY = (end.y - start.y) * height;
+    const segmentLength = segmentX ** 2 + segmentY ** 2;
+    const ratio =
+      segmentLength === 0
+        ? 0
+        : clamp(
+            ((pointerX - startX) * segmentX +
+              (pointerY - startY) * segmentY) /
+              segmentLength,
+          );
+    const projectedX = startX + segmentX * ratio;
+    const projectedY = startY + segmentY * ratio;
+    const distance =
+      (pointerX - projectedX) ** 2 + (pointerY - projectedY) ** 2;
+
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      wallSegmentIndex = index;
+      positionRatio = ratio;
+    }
+  });
+
+  return { wallSegmentIndex, positionRatio };
 }
 
 function openingPoint(

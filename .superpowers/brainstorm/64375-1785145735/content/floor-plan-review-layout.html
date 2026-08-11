@@ -1,0 +1,96 @@
+<h2>Как менеджер будет проверять распознанные комнаты?</h2>
+<p class="subtitle">
+  Оба варианта показывают найденные комнаты, размеры и окна. Кликни по макету,
+  который удобнее для ежедневной работы.
+</p>
+
+<div class="cards">
+  <div class="card" data-choice="overlay-sidebar" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f6f4ef">
+      <div style="display:grid;grid-template-columns:minmax(0,1.65fr) minmax(220px,.75fr);gap:12px;min-height:390px">
+        <div style="position:relative;overflow:hidden;border:1px solid #d9d5cc;border-radius:12px;background:white;padding:8px">
+          <img src="/files/floor-plan.jpg" alt="План квартиры" style="width:100%;height:100%;object-fit:contain;display:block">
+          <div style="position:absolute;left:6%;top:29%;width:20%;height:28%;border:2px solid #e75b39;background:rgba(231,91,57,.17);border-radius:5px">
+            <span style="position:absolute;left:8px;top:8px;background:#fff;padding:3px 7px;border-radius:8px;font-size:11px;font-weight:700;color:#8b2d1d">Санузел · 4.1 м²</span>
+          </div>
+          <div style="position:absolute;left:6%;top:57%;width:29%;height:36%;border:2px solid #8a65d6;background:rgba(138,101,214,.15);border-radius:5px">
+            <span style="position:absolute;left:8px;top:8px;background:#fff;padding:3px 7px;border-radius:8px;font-size:11px;font-weight:700;color:#53348e">Спальня · 5.7 м²</span>
+          </div>
+          <div style="position:absolute;left:36%;top:56%;width:34%;height:37%;border:3px solid #1e8f73;background:rgba(30,143,115,.18);border-radius:5px;box-shadow:0 0 0 3px rgba(30,143,115,.09)">
+            <span style="position:absolute;left:8px;top:8px;background:#fff;padding:3px 7px;border-radius:8px;font-size:11px;font-weight:700;color:#12634f">Гостиная · 6.0 м²</span>
+            <span style="position:absolute;bottom:-5px;left:24%;width:55%;height:6px;background:#308dc9;border-radius:4px" title="Окно"></span>
+          </div>
+          <div style="position:absolute;right:5%;top:28%;width:24%;height:65%;border:2px solid #d39b21;background:rgba(211,155,33,.14);border-radius:5px">
+            <span style="position:absolute;left:8px;top:8px;background:#fff;padding:3px 7px;border-radius:8px;font-size:11px;font-weight:700;color:#875d07">Кухня · 6.3 м²</span>
+            <span style="position:absolute;right:-5px;top:28%;width:6px;height:26%;background:#308dc9;border-radius:4px" title="Окно"></span>
+          </div>
+          <div style="position:absolute;left:39%;top:6%;width:31%;height:48%;border:2px dashed #8f98a3;background:rgba(143,152,163,.10);border-radius:5px">
+            <span style="position:absolute;left:8px;top:8px;background:#fff;padding:3px 7px;border-radius:8px;font-size:11px;font-weight:700;color:#505861">Тип не уверен · 72%</span>
+          </div>
+          <div style="position:absolute;left:12px;bottom:12px;display:flex;gap:7px;background:rgba(255,255,255,.94);padding:6px 8px;border-radius:10px;font-size:10px">
+            <span><b style="color:#1e8f73">■</b> выбранная комната</span>
+            <span><b style="color:#308dc9">━</b> окно</span>
+            <span><b style="color:#8f98a3">┄</b> требует проверки</span>
+          </div>
+        </div>
+
+        <div style="border:1px solid #d9d5cc;border-radius:12px;background:white;padding:14px;text-align:left">
+          <div style="font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#888">Комната 3 из 5</div>
+          <h4 style="margin:5px 0 12px;font-size:17px">Гостиная</h4>
+          <label style="display:block;font-size:10px;color:#777;margin-top:8px">Тип комнаты</label>
+          <div style="border:1px solid #d8d4cc;border-radius:8px;padding:8px;margin-top:4px;font-size:12px">Гостиная⌄</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+            <div><label style="display:block;font-size:10px;color:#777;margin-top:8px">Ширина</label><div style="border:1px solid #d8d4cc;border-radius:8px;padding:8px;margin-top:4px;font-size:12px">348 см</div></div>
+            <div><label style="display:block;font-size:10px;color:#777;margin-top:8px">Глубина</label><div style="border:1px solid #d8d4cc;border-radius:8px;padding:8px;margin-top:4px;font-size:12px">267 см</div></div>
+          </div>
+          <label style="display:block;font-size:10px;color:#777;margin-top:8px">Стиль</label>
+          <div style="border:1px solid #d8d4cc;border-radius:8px;padding:8px;margin-top:4px;font-size:12px">Скандинавский⌄</div>
+          <div style="margin-top:10px;padding:9px;border-radius:8px;background:#edf6fb;font-size:11px;color:#31667d">
+            1 окно · нижняя стена · положение подтверждено
+          </div>
+          <div style="display:flex;gap:6px;margin-top:12px">
+            <button class="mock-button" style="flex:1;font-size:11px;padding:8px">Сохранить</button>
+            <button style="flex:1;border:1px solid #ddd;background:#fff;border-radius:8px;font-size:11px">Исключить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · План + боковая панель — рекомендую</h3>
+      <p>
+        Кликаем комнату прямо на плане, видим её контур и окна, справа сразу
+        исправляем тип, размеры и индивидуальный стиль.
+      </p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="plan-table" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:16px;background:#f6f4ef">
+      <div style="display:grid;grid-template-rows:235px auto;gap:10px;min-height:390px">
+        <div style="position:relative;overflow:hidden;border:1px solid #d9d5cc;border-radius:12px;background:white;padding:8px">
+          <img src="/files/floor-plan.jpg" alt="План квартиры" style="width:100%;height:100%;object-fit:contain;display:block">
+          <span style="position:absolute;left:11%;top:37%;background:#fff;border:2px solid #e75b39;border-radius:50%;width:24px;height:24px;line-height:20px;font-size:11px;font-weight:700">1</span>
+          <span style="position:absolute;left:14%;top:68%;background:#fff;border:2px solid #8a65d6;border-radius:50%;width:24px;height:24px;line-height:20px;font-size:11px;font-weight:700">2</span>
+          <span style="position:absolute;left:48%;top:68%;background:#fff;border:2px solid #1e8f73;border-radius:50%;width:24px;height:24px;line-height:20px;font-size:11px;font-weight:700">3</span>
+          <span style="position:absolute;right:15%;top:55%;background:#fff;border:2px solid #d39b21;border-radius:50%;width:24px;height:24px;line-height:20px;font-size:11px;font-weight:700">4</span>
+          <span style="position:absolute;left:53%;top:28%;background:#fff;border:2px dashed #8f98a3;border-radius:50%;width:24px;height:24px;line-height:20px;font-size:11px;font-weight:700">5</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;text-align:left">
+          <div style="border:1px solid #ddd8cf;border-radius:9px;background:#fff;padding:9px"><b style="font-size:11px">1 · Санузел</b><div style="font-size:10px;color:#777;margin-top:4px">202 × 202 · Modern⌄</div></div>
+          <div style="border:1px solid #ddd8cf;border-radius:9px;background:#fff;padding:9px"><b style="font-size:11px">2 · Спальня</b><div style="font-size:10px;color:#777;margin-top:4px">223 × 254 · Scandi⌄</div></div>
+          <div style="border:2px solid #1e8f73;border-radius:9px;background:#fff;padding:8px"><b style="font-size:11px">3 · Гостиная</b><div style="font-size:10px;color:#777;margin-top:4px">348 × 267 · Scandi⌄</div></div>
+          <div style="border:1px solid #ddd8cf;border-radius:9px;background:#fff;padding:9px"><b style="font-size:11px">4 · Кухня</b><div style="font-size:10px;color:#777;margin-top:4px">241 × 260 · Minimal⌄</div></div>
+          <div style="border:1px dashed #a0a6ae;border-radius:9px;background:#fff;padding:9px"><b style="font-size:11px">5 · Уточнить тип</b><div style="font-size:10px;color:#b15c28;margin-top:4px">Уверенность 72%</div></div>
+          <div style="border:1px dashed #d2cec6;border-radius:9px;background:#faf9f6;padding:9px;color:#777"><b style="font-size:11px">＋ Добавить комнату</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · План сверху, карточки комнат снизу</h3>
+      <p>
+        Компактнее и проще технически, но связь комнаты с контуром и окнами
+        менее очевидна, особенно на сложной планировке.
+      </p>
+    </div>
+  </div>
+</div>

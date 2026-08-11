@@ -22,7 +22,9 @@ import {
 } from './providers/ai-provider.interface.js';
 import { PromptBuilderService } from './prompt-builder.service.js';
 import { createProductSnapshot } from './utils/product-snapshot.util.js';
-import { ProductMatchingService } from './product-matching.service.js';
+import { DeveloperRoomGenerationService } from './developer-room-generation.service.js';
+import { ProductCurationService } from './product-curation.service.js';
+import type { ProductSelectionMetadata } from './product-curation.types.js';
 
 const GENERATION_VARIANT_CONCURRENCY = 2;
 const GENERATION_VARIANT_RETRIES = 3;
@@ -51,6 +53,61 @@ type VariantProgressState = {
   externalJobId?: string;
 };
 
+export function isRetryableGenerationError(error: unknown) {
+  if (error instanceof BadRequestException) return false;
+
+  const message =
+    error instanceof Error ? error.message.toLowerCase() : String(error);
+  const deterministicMarkers = [
+    'prompt_not_valid',
+    'invalid prompt',
+    'invalid reference',
+    'invalid input',
+    'unsupported format',
+    'unauthorized',
+    'forbidden',
+    'quota',
+    'limit exhausted',
+  ];
+
+  if (deterministicMarkers.some((marker) => message.includes(marker))) {
+    return false;
+  }
+
+  const statusCode = getGenerationErrorStatusCode(error);
+
+  if ([400, 401, 403].includes(statusCode ?? 0)) return false;
+  if ([429, 500, 502, 503, 504].includes(statusCode ?? 0)) return true;
+  if (message.includes('status=4')) return true;
+
+  return [
+    'timeout',
+    'timed out',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'fetch failed',
+    'network error',
+    'socket hang up',
+    'temporary provider',
+    'result full download failed',
+  ].some((marker) => message.includes(marker));
+}
+
+function getGenerationErrorStatusCode(error: unknown) {
+  if (!error || typeof error !== 'object') return undefined;
+
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+  };
+  const statusCode =
+    candidate.statusCode ?? candidate.status ?? candidate.response?.status;
+
+  return typeof statusCode === 'number' ? statusCode : undefined;
+}
+
 @Injectable()
 export class GenerationProcessingService {
   private readonly logger = new Logger(GenerationProcessingService.name);
@@ -59,7 +116,8 @@ export class GenerationProcessingService {
     private readonly prisma: PrismaService,
     private readonly promptBuilder: PromptBuilderService,
     private readonly aiProviderFactory: AiProviderFactory,
-    private readonly productMatchingService: ProductMatchingService,
+    private readonly productCurationService: ProductCurationService,
+    private readonly developerRoomGenerationService: DeveloperRoomGenerationService,
   ) {}
 
   async processGenerationJob(generationJobId: string): Promise<unknown> {
@@ -84,6 +142,14 @@ export class GenerationProcessingService {
     });
 
     if (!generationJob) throw new NotFoundException('Generation job not found');
+
+    if (
+      generationJob.scenario === GenerationScenario.B2B_DEVELOPER_ROOM
+    ) {
+      return this.developerRoomGenerationService.processGenerationJob(
+        generationJob.id,
+      );
+    }
 
     this.logger.log(
       `Generation job ${generationJob.id}: loaded status=${generationJob.status}, provider=${generationJob.provider}, roomProjectId=${generationJob.roomProjectId}`,
@@ -146,6 +212,39 @@ export class GenerationProcessingService {
             project.sourceImageUrl,
           )
         : null;
+      const curatedPlans = fixedProducts
+        ? []
+        : await this.productCurationService.curateMarketplace(
+            {
+              roomKey: project.id,
+              roomType: project.roomType,
+              style: project.style,
+              budgetMin: project.budgetMin ?? undefined,
+              budgetMax: project.budgetMax ?? undefined,
+              widthCm: project.widthCm ?? undefined,
+              depthCm: project.depthCm ?? undefined,
+              ceilingHeightCm: project.heightCm ?? undefined,
+              hasSourceImage: Boolean(project.sourceImageUrl),
+            },
+            variantsCount,
+          );
+      const curatedPlanByVariant = new Map(
+        curatedPlans.map((plan) => [plan.scenePlan.variantIndex, plan]),
+      );
+      const selectionMetadata = fixedProducts
+        ? {
+            mode: 'MANUAL' as const,
+            scenario: generationJob.scenario,
+            requestedPlanCount: variantsCount,
+            aiPlanCount: 0,
+            deterministicPlanCount: 0,
+            repairedPlanCount: 0,
+          }
+        : this.buildSelectionMetadata(
+            curatedPlans,
+            generationJob.scenario,
+            variantsCount,
+          );
       const variantProgress = new Map<number, VariantProgressState>();
 
       for (
@@ -176,7 +275,6 @@ export class GenerationProcessingService {
 
       const preparedVariants: PreparedVariant[] = [];
       const productById = new Map<string, Product>();
-      const usedProductIds = new Set<string>();
       let firstPrompt: string | null = null;
       let firstNegativePrompt: string | null = null;
 
@@ -191,6 +289,7 @@ export class GenerationProcessingService {
           );
         }
 
+        const curatedPlan = curatedPlanByVariant.get(variantNumber);
         const productSet = fixedProducts
           ? {
               products: fixedProducts,
@@ -200,17 +299,14 @@ export class GenerationProcessingService {
               ),
               missingRequiredCategories: [],
             }
-          : await this.productMatchingService.buildProductSetForVariant({
-              roomType: project.roomType,
-              style: project.style,
-              budgetMin: project.budgetMin ?? undefined,
-              budgetMax: project.budgetMax ?? undefined,
-              widthCm: project.widthCm ?? undefined,
-              depthCm: project.depthCm ?? undefined,
-              variantNumber,
-              excludeProductIds:
-                variantNumber <= 3 ? Array.from(usedProductIds) : [],
-            });
+          : curatedPlan;
+
+        if (!productSet) {
+          this.logger.warn(
+            `Generation job ${generationJob.id}: curator returned no plan for variant=${variantNumber}`,
+          );
+          continue;
+        }
 
         const products = productSet.products;
 
@@ -224,7 +320,6 @@ export class GenerationProcessingService {
 
         for (const product of products) {
           productById.set(product.id, product);
-          usedProductIds.add(product.id);
         }
 
         if (productSet.missingRequiredCategories.length > 0) {
@@ -253,6 +348,8 @@ export class GenerationProcessingService {
             heightCm: project.heightCm ?? undefined,
             depthCm: project.depthCm ?? undefined,
             sourceImageUrl: project.sourceImageUrl ?? undefined,
+            scenePlan: curatedPlan?.scenePlan,
+            spatialProfile: curatedPlan?.spatialProfile,
           },
           products,
           9500,
@@ -274,6 +371,8 @@ export class GenerationProcessingService {
             heightCm: project.heightCm ?? undefined,
             depthCm: project.depthCm ?? undefined,
             sourceImageUrl: project.sourceImageUrl ?? undefined,
+            scenePlan: curatedPlan?.scenePlan,
+            spatialProfile: curatedPlan?.spatialProfile,
           },
           products,
         );
@@ -306,6 +405,14 @@ export class GenerationProcessingService {
         data: {
           prompt: firstPrompt,
           negativePrompt: firstNegativePrompt,
+          ...(selectionMetadata
+            ? {
+                inputParams: {
+                  ...this.asObject(generationJob.inputParams),
+                  productSelection: selectionMetadata,
+                },
+              }
+            : {}),
           progress: GENERATION_PROGRESS_START,
           currentStep: 'Готовим AI-промпты',
         },
@@ -486,6 +593,80 @@ export class GenerationProcessingService {
     }
 
     return products;
+  }
+
+  private asObject(value: unknown): Record<string, unknown> {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private buildSelectionMetadata(
+    plans: Array<{
+      curationMode: string;
+      fallbackReason?: string;
+      curatorModel?: string;
+      curationDurationMs?: number;
+    }>,
+    scenario: GenerationScenario,
+    requestedPlanCount: number,
+  ): ProductSelectionMetadata | null {
+    if (plans.length !== requestedPlanCount) return null;
+
+    const aiPlanCount = plans.filter(
+      ({ curationMode }) => curationMode === 'AI_CURATED',
+    ).length;
+    const repairedPlanCount = plans.filter(
+      ({ curationMode }) => curationMode === 'AI_CURATED_REPAIRED',
+    ).length;
+    const fallbackPlanCount = plans.filter(
+      ({ curationMode }) => curationMode === 'DETERMINISTIC_FALLBACK',
+    ).length;
+    const deterministicOnlyCount = plans.filter(
+      ({ curationMode }) => curationMode === 'DETERMINISTIC_ONLY',
+    ).length;
+    if (
+      aiPlanCount +
+        repairedPlanCount +
+        fallbackPlanCount +
+        deterministicOnlyCount !==
+      requestedPlanCount
+    ) {
+      return null;
+    }
+
+    const mode =
+      aiPlanCount === requestedPlanCount
+        ? 'AI_CURATED'
+        : aiPlanCount + repairedPlanCount === requestedPlanCount
+          ? 'AI_CURATED_REPAIRED'
+          : fallbackPlanCount === requestedPlanCount
+            ? 'DETERMINISTIC_FALLBACK'
+            : deterministicOnlyCount === requestedPlanCount
+              ? 'DETERMINISTIC_ONLY'
+              : 'MIXED';
+    const metadataPlan =
+      plans.find(
+        ({ curatorModel, curationDurationMs }) =>
+          curatorModel || curationDurationMs !== undefined,
+      ) ?? plans[0];
+    return {
+      mode,
+      scenario,
+      requestedPlanCount,
+      aiPlanCount,
+      deterministicPlanCount: fallbackPlanCount + deterministicOnlyCount,
+      repairedPlanCount,
+      ...(metadataPlan?.fallbackReason
+        ? { fallbackReason: metadataPlan.fallbackReason }
+        : {}),
+      ...(metadataPlan?.curatorModel
+        ? { model: metadataPlan.curatorModel }
+        : {}),
+      ...(metadataPlan?.curationDurationMs !== undefined
+        ? { durationMs: metadataPlan.curationDurationMs }
+        : {}),
+    };
   }
 
   private normalizeProviderStatus(
@@ -763,7 +944,12 @@ export class GenerationProcessingService {
       try {
         return await operation();
       } catch (error) {
-        if (attempt === maximumAttempts) throw error;
+        if (
+          attempt === maximumAttempts ||
+          !isRetryableGenerationError(error)
+        ) {
+          throw error;
+        }
 
         const delayMs = this.getRetryBaseDelayMs() * 2 ** (attempt - 1);
 

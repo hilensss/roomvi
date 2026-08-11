@@ -9,6 +9,7 @@ import {
   B2BProjectStatus,
   B2BProjectType,
   B2BRoomStatus,
+  GenerationScenario,
   InteriorStyle,
   RoomType,
 } from '@roomvi/database';
@@ -338,6 +339,88 @@ test('confirmRooms atomically claims the reviewed revision before marking rooms 
   assert.equal(
     calls.find(([name]) => name === 'rooms.update')[1].data.status,
     B2BRoomStatus.READY_TO_GENERATE,
+  );
+});
+
+test('startGeneration creates and enqueues one developer job per included ready room', async () => {
+  const rooms = [
+    reviewedRoom({ id: 'room-1', sortOrder: 0 }),
+    reviewedRoom({
+      id: 'room-2',
+      name: 'Спальня',
+      roomType: RoomType.BEDROOM,
+      styleOverride: InteriorStyle.SCANDI,
+      sortOrder: 1,
+    }),
+    reviewedRoom({ id: 'room-skipped', sortOrder: 2, isIncluded: false }),
+  ].map((room) => ({
+    ...room,
+    status: room.isIncluded
+      ? B2BRoomStatus.READY_TO_GENERATE
+      : B2BRoomStatus.SKIPPED,
+    roomProjectId: null,
+  }));
+  const project = developerProject({
+    status: B2BProjectStatus.READY_TO_GENERATE,
+    rooms,
+  });
+  const createdJobs = [];
+  const enqueued = [];
+  let roomProjectNumber = 0;
+  const tx = {
+    b2BProject: {
+      updateMany: async () => ({ count: 1 }),
+      findUnique: async () => project,
+    },
+    roomProject: {
+      create: async ({ data }) => ({
+        id: `room-project-${++roomProjectNumber}`,
+        ...data,
+      }),
+    },
+    generationJob: {
+      create: async ({ data }) => {
+        const job = { id: `job-${createdJobs.length + 1}`, ...data };
+        createdJobs.push(job);
+        return job;
+      },
+    },
+    b2BRoom: {
+      update: async ({ where, data }) => ({ id: where.id, ...data }),
+    },
+  };
+  const service = new B2BProjectsService(
+    {
+      b2BProject: { findUnique: async () => project },
+      $transaction: async (callback) => callback(tx),
+    },
+    {
+      enqueueGeneration: async (jobId) => enqueued.push(jobId),
+    },
+  );
+
+  const result = await service.startGeneration('project-1', 'manager-1');
+
+  assert.equal(result.jobs.length, 2);
+  assert.deepEqual(enqueued, ['job-1', 'job-2']);
+  assert.deepEqual(
+    createdJobs.map((job) => ({
+      scenario: job.scenario,
+      variants: job.requestedVariants,
+      roomId: job.b2bRoomId,
+    })),
+    [
+      {
+        scenario: GenerationScenario.B2B_DEVELOPER_ROOM,
+        variants: 1,
+        roomId: 'room-1',
+      },
+      {
+        scenario: GenerationScenario.B2B_DEVELOPER_ROOM,
+        variants: 1,
+        roomId: 'room-2',
+      },
+    ],
   );
 });
 

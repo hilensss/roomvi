@@ -1,6 +1,6 @@
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { renderWithQueryClient, screen } from '@/test/render';
+import { fireEvent, renderWithQueryClient, screen } from '@/test/render';
 import { ApiError } from '@/shared/api/api-client';
 import type { DeveloperB2BProject } from '../model/b2b.types';
 
@@ -137,6 +137,92 @@ it('updates polygon coordinates through accessible controls', async () => {
   expect(xInput).toHaveValue(0.2);
 });
 
+it('moves an opening with the pointer and switches it to the nearest wall', () => {
+  const projectWithOpening = {
+    ...project,
+    rooms: [
+      {
+        ...project.rooms[0],
+        openings: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            kind: 'WINDOW',
+            wallSegmentIndex: 0,
+            positionRatio: 0.5,
+            widthCm: 150,
+            recognitionConfidence: 0.8,
+          },
+        ],
+      },
+    ],
+  } satisfies DeveloperB2BProject;
+  const { container } = renderWithQueryClient(
+    <FloorPlanRoomReview project={projectWithOpening} />,
+  );
+  const svg = container.querySelector('svg');
+  if (!svg) throw new Error('Floor-plan SVG was not rendered');
+  vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    left: 0,
+    top: 0,
+    right: 1000,
+    bottom: 1000,
+    width: 1000,
+    height: 1000,
+    toJSON: () => ({}),
+  });
+  const opening = screen.getByLabelText('Переместить окно 1');
+  Object.defineProperty(opening, 'setPointerCapture', { value: vi.fn() });
+
+  fireEvent.pointerDown(opening, { pointerId: 1, clientX: 300, clientY: 100 });
+  fireEvent.pointerMove(svg, { pointerId: 1, clientX: 100, clientY: 300 });
+
+  expect(screen.getByLabelText('Стена проёма 1')).toHaveValue(3);
+  expect(screen.getByLabelText('Позиция проёма 1')).toHaveValue(0.5);
+});
+
+it('adds a contour point and preserves openings on the split wall', async () => {
+  const user = userEvent.setup();
+  const projectWithOpening = {
+    ...project,
+    rooms: [
+      {
+        ...project.rooms[0],
+        openings: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            kind: 'WINDOW',
+            wallSegmentIndex: 0,
+            positionRatio: 0.75,
+            widthCm: 150,
+            recognitionConfidence: 0.8,
+          },
+        ],
+      },
+    ],
+  } satisfies DeveloperB2BProject;
+  renderWithQueryClient(<FloorPlanRoomReview project={projectWithOpening} />);
+
+  await user.click(
+    screen.getByRole('button', { name: 'Добавить точку контура' }),
+  );
+
+  expect(screen.getAllByLabelText(/Точка \d+ X/)).toHaveLength(5);
+  expect(screen.getByLabelText('Точка 2 X')).toHaveValue(0.3);
+  expect(screen.getByLabelText('Точка 2 Y')).toHaveValue(0.1);
+  expect(screen.getByLabelText('Стена проёма 1')).toHaveValue(1);
+  expect(screen.getByLabelText('Позиция проёма 1')).toHaveValue(0.5);
+});
+
+it('keeps the plan overlay at the intrinsic image height', () => {
+  renderWithQueryClient(<FloorPlanRoomReview project={project} />);
+
+  expect(
+    screen.getByRole('img', { name: 'Планировка квартиры' }).parentElement,
+  ).toHaveClass('self-start');
+});
+
 it('omits temporary room and opening ids when saving manual additions', async () => {
   const user = userEvent.setup();
   renderWithQueryClient(<FloorPlanRoomReview project={project} />);
@@ -145,8 +231,8 @@ it('omits temporary room and opening ids when saving manual additions', async ()
   await user.selectOptions(screen.getByLabelText('Тип комнаты'), 'BEDROOM');
   await user.clear(screen.getByLabelText('Ширина, см'));
   await user.type(screen.getByLabelText('Ширина, см'), '320');
-  await user.clear(screen.getByLabelText('Глубина, см'));
-  await user.type(screen.getByLabelText('Глубина, см'), '410');
+  await user.clear(screen.getByLabelText('Длина, см'));
+  await user.type(screen.getByLabelText('Длина, см'), '410');
   await user.click(screen.getByRole('button', { name: 'Добавить окно' }));
   await user.click(screen.getByRole('button', { name: 'Сохранить комнаты' }));
 
@@ -154,6 +240,76 @@ it('omits temporary room and opening ids when saving manual additions', async ()
   const addedRoom = submittedRooms.at(-1);
   assertNoTemporaryId(addedRoom.id);
   assertNoTemporaryId(addedRoom.openings[0].id);
+});
+
+it('explains which required room fields block confirmation', () => {
+  const incompleteProject = {
+    ...project,
+    rooms: [
+      {
+        ...project.rooms[0],
+        name: 'Гостиная',
+        roomType: 'LIVING_ROOM',
+        depthCm: null,
+      },
+      {
+        ...project.rooms[0],
+        id: '33333333-3333-4333-8333-333333333333',
+        name: 'Спальня',
+        roomType: null,
+        widthCm: null,
+      },
+    ],
+  } satisfies DeveloperB2BProject;
+
+  renderWithQueryClient(<FloorPlanRoomReview project={incompleteProject} />);
+
+  expect(screen.getByLabelText('Длина, см')).toBeInTheDocument();
+  expect(screen.getByText(/Гостиная — длина/i)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Спальня — тип комнаты, ширина/i),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/площадь обязательна/i)).not.toBeInTheDocument();
+});
+
+it('omits database-only opening fields when saving detected rooms', async () => {
+  const user = userEvent.setup();
+  const projectWithPersistedOpening = {
+    ...project,
+    rooms: [
+      {
+        ...project.rooms[0],
+        openings: [
+          {
+            id: '22222222-2222-4222-8222-222222222222',
+            kind: 'WINDOW',
+            wallSegmentIndex: 2,
+            positionRatio: 0.4,
+            widthCm: 150,
+            recognitionConfidence: 0.8,
+            b2bRoomId: '11111111-1111-4111-8111-111111111111',
+            createdAt: '2026-07-27T00:00:00.000Z',
+            updatedAt: '2026-07-27T00:00:00.000Z',
+          },
+        ],
+      },
+    ],
+  } as unknown as DeveloperB2BProject;
+  renderWithQueryClient(
+    <FloorPlanRoomReview project={projectWithPersistedOpening} />,
+  );
+
+  await user.type(screen.getByLabelText('Название'), ' обновлено');
+  await user.click(screen.getByRole('button', { name: 'Сохранить комнаты' }));
+
+  expect(mocks.replaceRooms.mock.calls[0][0].rooms[0].openings[0]).toEqual({
+    id: '22222222-2222-4222-8222-222222222222',
+    kind: 'WINDOW',
+    wallSegmentIndex: 2,
+    positionRatio: 0.4,
+    widthCm: 150,
+    recognitionConfidence: 0.8,
+  });
 });
 
 function assertNoTemporaryId(value: unknown) {

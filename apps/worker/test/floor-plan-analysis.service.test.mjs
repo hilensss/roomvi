@@ -11,6 +11,9 @@ import {
 const { FloorPlanAnalysisService } = await import(
   '../dist/modules/floor-plan-analysis/floor-plan-analysis.service.js'
 );
+const { ReasoningAiProviderError } = await import(
+  '../dist/modules/reasoning-ai/reasoning-ai-provider.interface.js'
+);
 
 function runRecord(overrides = {}) {
   return {
@@ -324,4 +327,67 @@ test('floor-plan analysis records a safe terminal error on failure', async () =>
       args.data.status === B2BProjectStatus.FAILED,
   )[1];
   assert.equal(projectFailure.data.status, B2BProjectStatus.FAILED);
+});
+
+test('floor-plan analysis exposes a safe OpenAI quota error for the manager', async () => {
+  const calls = [];
+  const prisma = {
+    floorPlanAnalysisRun: {
+      findUnique: async () => runRecord(),
+      updateMany: async () => ({ count: 1 }),
+    },
+    b2BProject: {
+      updateMany: async () => ({ count: 1 }),
+    },
+    file: {
+      findUnique: async () => ({
+        storageKey: 'uploads/rooms/floor-plan.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1024,
+      }),
+    },
+    $transaction: async (callback) =>
+      callback({
+        floorPlanAnalysisRun: {
+          updateMany: async (args) => {
+            calls.push(['run.failed', args]);
+            return { count: 1 };
+          },
+        },
+        b2BProject: {
+          updateMany: async () => ({ count: 1 }),
+        },
+      }),
+  };
+  const service = new FloorPlanAnalysisService(
+    prisma,
+    {
+      loadNormalizedImage: async () => ({
+        name: 'floor-plan.jpg',
+        mimeType: 'image/jpeg',
+        bytes: Buffer.from('normalized-plan'),
+      }),
+    },
+    {
+      analyze: async () => {
+        throw new ReasoningAiProviderError(
+          'OpenAI API quota is exhausted. Configure API billing or add credits.',
+          false,
+          429,
+          'insufficient_quota',
+        );
+      },
+    },
+  );
+
+  await assert.rejects(
+    service.process('analysis-1'),
+    /OpenAI API quota is exhausted/i,
+  );
+
+  const runFailure = calls.find(([name]) => name === 'run.failed')[1];
+  assert.equal(
+    runFailure.data.errorMessage,
+    'OpenAI API quota is exhausted. Configure API billing or add credits.',
+  );
 });
