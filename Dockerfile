@@ -19,7 +19,28 @@ COPY packages/shared/package.json packages/shared/package.json
 
 RUN npm ci
 
-FROM dependencies AS build
+FROM dependencies AS source
+
+COPY . .
+
+RUN DATABASE_URL=postgresql://roomvi:roomvi@localhost:5432/roomvi \
+  ./node_modules/.bin/prisma generate \
+  --schema=packages/database/prisma/schema.prisma
+
+FROM source AS packages-build
+
+RUN npm run build -w @roomvi/shared \
+  && npm run build -w @roomvi/database
+
+FROM packages-build AS api-build
+
+RUN npm run build -w api
+
+FROM packages-build AS worker-build
+
+RUN npm run build -w worker
+
+FROM packages-build AS web-build
 
 ARG NEXT_PUBLIC_API_URL=/release/api
 ARG NEXT_PUBLIC_BASE_PATH=/release
@@ -27,14 +48,9 @@ ARG NEXT_PUBLIC_BASE_PATH=/release
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 
-COPY . .
+RUN npm run build -w web
 
-RUN DATABASE_URL=postgresql://roomvi:roomvi@localhost:5432/roomvi \
-  ./node_modules/.bin/prisma generate \
-  --schema=packages/database/prisma/schema.prisma
-RUN npm run build
-
-FROM build AS production-dependencies
+FROM packages-build AS production-dependencies
 
 RUN npm prune --omit=dev
 
@@ -44,13 +60,13 @@ ENV NODE_ENV=production
 ENV API_PORT=4000
 
 COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/package.json ./apps/api/package.json
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/packages/database/package.json ./packages/database/package.json
-COPY --from=build /app/packages/database/dist ./packages/database/dist
-COPY --from=build /app/packages/database/generated ./packages/database/generated
-COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=api-build /app/apps/api/package.json ./apps/api/package.json
+COPY --from=api-build /app/apps/api/dist ./apps/api/dist
+COPY --from=api-build /app/packages/database/package.json ./packages/database/package.json
+COPY --from=api-build /app/packages/database/dist ./packages/database/dist
+COPY --from=api-build /app/packages/database/generated ./packages/database/generated
+COPY --from=api-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=api-build /app/packages/shared/dist ./packages/shared/dist
 
 USER node
 EXPOSE 4000
@@ -62,13 +78,13 @@ FROM base AS worker
 ENV NODE_ENV=production
 
 COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=build /app/apps/worker/package.json ./apps/worker/package.json
-COPY --from=build /app/apps/worker/dist ./apps/worker/dist
-COPY --from=build /app/packages/database/package.json ./packages/database/package.json
-COPY --from=build /app/packages/database/dist ./packages/database/dist
-COPY --from=build /app/packages/database/generated ./packages/database/generated
-COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=worker-build /app/apps/worker/package.json ./apps/worker/package.json
+COPY --from=worker-build /app/apps/worker/dist ./apps/worker/dist
+COPY --from=worker-build /app/packages/database/package.json ./packages/database/package.json
+COPY --from=worker-build /app/packages/database/dist ./packages/database/dist
+COPY --from=worker-build /app/packages/database/generated ./packages/database/generated
+COPY --from=worker-build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=worker-build /app/packages/shared/dist ./packages/shared/dist
 
 USER node
 
@@ -78,10 +94,10 @@ FROM base AS migrate
 
 ENV NODE_ENV=production
 
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/packages/database/package.json ./packages/database/package.json
-COPY --from=build /app/packages/database/prisma ./packages/database/prisma
+COPY --from=source /app/node_modules ./node_modules
+COPY --from=source /app/package.json ./package.json
+COPY --from=source /app/packages/database/package.json ./packages/database/package.json
+COPY --from=source /app/packages/database/prisma ./packages/database/prisma
 
 USER node
 
@@ -93,9 +109,9 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
-COPY --from=build --chown=node:node /app/apps/web/.next/standalone ./
-COPY --from=build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
-COPY --from=build --chown=node:node /app/apps/web/public ./apps/web/public
+COPY --from=web-build --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=web-build --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=web-build --chown=node:node /app/apps/web/public ./apps/web/public
 
 USER node
 EXPOSE 3000
