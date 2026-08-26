@@ -23,11 +23,13 @@ FROM dependencies AS source
 
 COPY . .
 
+FROM source AS database-source
+
 RUN DATABASE_URL=postgresql://roomvi:roomvi@localhost:5432/roomvi \
   ./node_modules/.bin/prisma generate \
   --schema=packages/database/prisma/schema.prisma
 
-FROM source AS packages-build
+FROM database-source AS packages-build
 
 RUN npm run build -w @roomvi/shared \
   && npm run build -w @roomvi/database
@@ -48,13 +50,14 @@ FROM worker-build AS worker-production
 
 RUN npm prune --omit=dev
 
-FROM packages-build AS web-build
+FROM source AS web-build
 
 ARG NEXT_PUBLIC_API_URL=/release/api
 ARG NEXT_PUBLIC_BASE_PATH=/release
 
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN npm run build -w web
 
@@ -98,10 +101,10 @@ FROM base AS migrate
 
 ENV NODE_ENV=production
 
-COPY --from=source /app/node_modules ./node_modules
-COPY --from=source /app/package.json ./package.json
-COPY --from=source /app/packages/database/package.json ./packages/database/package.json
-COPY --from=source /app/packages/database/prisma ./packages/database/prisma
+COPY --from=database-source /app/node_modules ./node_modules
+COPY --from=database-source /app/package.json ./package.json
+COPY --from=database-source /app/packages/database/package.json ./packages/database/package.json
+COPY --from=database-source /app/packages/database/prisma ./packages/database/prisma
 
 USER node
 
