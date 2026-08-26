@@ -26,11 +26,11 @@
     "db:studio": "dotenv -e ../../.env -- prisma studio --schema=./prisma/schema.prisma"
   },
   "dependencies": {
-    "@prisma/client": "^6.8.0"
+    "@prisma/client": "^6.8.0",
+    "prisma": "^6.8.0"
   },
   "devDependencies": {
     "dotenv-cli": "^8.0.0",
-    "prisma": "^6.8.0",
     "typescript": "^5.8.0"
   }
 }

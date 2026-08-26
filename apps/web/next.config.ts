@@ -1,14 +1,12 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 
-const appDirectory = path.dirname(fileURLToPath(import.meta.url));
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? '';
 
 const nextConfig: NextConfig = {
   basePath,
-  output: 'standalone',
-  outputFileTracingRoot: path.join(appDirectory, '../..'),
+  experimental: {
+    cpus: 1,
+  },
   images: {
     unoptimized: true,
     remotePatterns: [

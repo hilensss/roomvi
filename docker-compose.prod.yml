@@ -1,5 +1,12 @@
 name: roomvi
 
+x-backend: &backend
+  image: roomvi-app:latest
+  pull_policy: never
+  init: true
+  env_file:
+    - ${ROOMVI_ENV_FILE:-.env.production}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -29,10 +36,10 @@ services:
       - redis_data:/data
 
   migrate:
-    build:
-      context: .
-      target: migrate
+    <<: *backend
+    command: npm run db:migrate:deploy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://roomvi:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/roomvi?schema=public
     depends_on:
       postgres:
@@ -40,13 +47,15 @@ services:
     restart: 'no'
 
   api:
+    <<: *backend
     build:
       context: .
-      target: api
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: /release/api
+        NEXT_PUBLIC_BASE_PATH: /release
+    command: node apps/api/dist/main.js
     restart: unless-stopped
-    init: true
-    env_file:
-      - ${ROOMVI_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
       API_PORT: 4000
@@ -68,13 +77,9 @@ services:
       start_period: 10s
 
   worker:
-    build:
-      context: .
-      target: worker
+    <<: *backend
+    command: node apps/worker/dist/main.js
     restart: unless-stopped
-    init: true
-    env_file:
-      - ${ROOMVI_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://roomvi:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.production}@postgres:5432/roomvi?schema=public
@@ -87,14 +92,17 @@ services:
         condition: service_healthy
 
   web:
-    build:
-      context: .
-      target: web
-      args:
-        NEXT_PUBLIC_API_URL: /release/api
-        NEXT_PUBLIC_BASE_PATH: /release
-    restart: unless-stopped
+    image: roomvi-app:latest
+    pull_policy: never
     init: true
+    command: npm run start -w web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: /release/api
+      NEXT_PUBLIC_BASE_PATH: /release
+    depends_on:
+      api:
+        condition: service_healthy
     healthcheck:
       test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost:3000/release']
       interval: 10s
