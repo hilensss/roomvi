@@ -5,7 +5,6 @@ import { useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
   ChevronRight,
   Heart,
   Package,

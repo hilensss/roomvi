@@ -58,8 +58,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
           {...register('password', {
             required: 'Введите пароль',
             minLength: {
-              value: 6,
-              message: 'Пароль должен быть не короче 6 символов',
+              value: 8,
+              message: 'Пароль должен быть не короче 8 символов',
             },
           })}
         />

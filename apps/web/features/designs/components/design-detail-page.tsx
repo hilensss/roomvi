@@ -3,13 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import {
-  CheckCircle,
-  ChevronLeft,
-  Package,
-  ShoppingCart,
-  Truck,
-} from 'lucide-react';
+import { ChevronLeft, Package, ShoppingCart, Truck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { getDesignVariant, addDesignVariantToCart } from '../api/designs-api';
 import { formatMoney } from '@/features/generation/lib/generation.helpers';

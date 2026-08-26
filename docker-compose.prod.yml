@@ -60,6 +60,12 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost:4000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   worker:
     build:
@@ -91,7 +97,13 @@ services:
     init: true
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost:3000/release']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   caddy:
     image: caddy:2.10-alpine
@@ -109,9 +121,9 @@ services:
       - caddy_config:/config
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   postgres_data:

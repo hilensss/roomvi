@@ -2,12 +2,15 @@ import Link from 'next/link';
 import { ArrowUpRight } from 'lucide-react';
 import { SafeImage } from '@/shared/ui/safe-image';
 import type { RoomProject } from '@/shared/api/types';
+import { formatDate } from '@/shared/i18n/locale';
+import { useLocale } from '@/shared/providers/locale-provider';
 
 type ProfileProjectCardProps = {
   project: RoomProject;
 };
 
 export function ProfileProjectCard({ project }: ProfileProjectCardProps) {
+  const { locale } = useLocale();
   let cover;
 
   if (project.designVariants) cover = project.designVariants?.imageUrl;
@@ -55,7 +58,9 @@ export function ProfileProjectCard({ project }: ProfileProjectCardProps) {
 
         <div className="flex items-center justify-between text-sm">
           <span className="text-ink-soft">{project.roomType}</span>
-          <span className="text-line">{formatDate(project.createdAt)}</span>
+          <span className="text-line">
+            {formatDate(project.createdAt, locale)}
+          </span>
         </div>
 
         <div className="mt-4 flex items-center justify-between border-t border-line/40 pt-4 text-xs text-ink-soft">
@@ -65,12 +70,4 @@ export function ProfileProjectCard({ project }: ProfileProjectCardProps) {
       </div>
     </Link>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(value));
 }

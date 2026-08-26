@@ -3,10 +3,9 @@
 import type { Dispatch, SetStateAction } from 'react';
 import { BUDGET_MAX, BUDGET_MIN } from '../../model/create-project.data';
 import type { CreateProjectFormState } from '../../model/create-project.types';
-import {
-  formatMoney,
-  getBudgetPercent,
-} from '../../lib/create-project.helpers';
+import { getBudgetPercent } from '../../lib/create-project.helpers';
+import { formatCurrency } from '@/shared/i18n/locale';
+import { useLocale } from '@/shared/providers/locale-provider';
 
 type StepProps = {
   form: CreateProjectFormState;
@@ -14,6 +13,7 @@ type StepProps = {
 };
 
 export function BudgetStep({ form, onChange }: StepProps) {
+  const { locale } = useLocale();
   const budgetPercent = getBudgetPercent(form.budgetMax);
 
   return (
@@ -23,7 +23,7 @@ export function BudgetStep({ form, onChange }: StepProps) {
           <span className="text-sm text-ink-soft">Бюджет на мебель</span>
 
           <span className="text-section-title text-ink">
-            {formatMoney(form.budgetMax)} <span className="text-brand">₽</span>
+            {formatCurrency(form.budgetMax, locale)}
           </span>
         </div>
 
@@ -57,8 +57,8 @@ export function BudgetStep({ form, onChange }: StepProps) {
         </div>
 
         <div className="mt-4 flex justify-between text-sm text-ink-soft">
-          <span>{formatMoney(BUDGET_MIN)} ₽</span>
-          <span>{formatMoney(BUDGET_MAX)} ₽</span>
+          <span>{formatCurrency(BUDGET_MIN, locale)}</span>
+          <span>{formatCurrency(BUDGET_MAX, locale)}</span>
         </div>
       </div>
     </div>

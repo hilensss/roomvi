@@ -2,7 +2,9 @@ node_modules
 dist
 .turbo
 .env
-.env.production
+.env.*
+!.env.example
+!.env.production.example
 .DS_Store
 coverage
 *.log

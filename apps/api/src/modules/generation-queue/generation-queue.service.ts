@@ -1,12 +1,14 @@
 import { InjectQueue } from '@nestjs/bullmq';
 import { Injectable } from '@nestjs/common';
-import { GENERATION_QUEUE_JOBS, GENERATION_QUEUE_NAME } from '@roomvi/shared';
+import {
+  GENERATION_QUEUE_JOBS,
+  GENERATION_QUEUE_NAME,
+  type AnalyzeFloorPlanJobPayload,
+  type GenerationQueuePayload,
+  type ProcessGenerationJobPayload,
+} from '@roomvi/shared';
 import { Queue } from 'bullmq';
-export type ProcessGenerationJobPayload = { generationJobId: string };
-export type AnalyzeFloorPlanJobPayload = { analysisRunId: string };
-type GenerationQueuePayload =
-  | ProcessGenerationJobPayload
-  | AnalyzeFloorPlanJobPayload;
+
 @Injectable()
 export class GenerationQueueService {
   constructor(
@@ -16,7 +18,7 @@ export class GenerationQueueService {
   async enqueueGeneration(generationJobId: string) {
     return this.generationQueue.add(
       GENERATION_QUEUE_JOBS.PROCESS_GENERATION,
-      { generationJobId },
+      { generationJobId } satisfies ProcessGenerationJobPayload,
       {
         attempts: 1, // Provider retries are scoped to each variant in the worker.
         backoff: { type: 'exponential', delay: 5000 },

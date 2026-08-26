@@ -1,8 +1,11 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
-import { NestExpressApplication } from '@nestjs/platform-express';
+
+const logger = new Logger('ApiBootstrap');
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.set('trust proxy', 1);
@@ -21,6 +24,13 @@ async function bootstrap() {
   );
   const port = Number(process.env.API_PORT ?? 4000);
   await app.listen(port, '0.0.0.0');
-  console.log(`API is running on port ${port}`);
+  logger.log(`API is running on port ${port}`);
 }
-bootstrap();
+
+void bootstrap().catch((error: unknown) => {
+  logger.error(
+    'API failed to start',
+    error instanceof Error ? error.stack : String(error),
+  );
+  process.exitCode = 1;
+});

@@ -100,15 +100,19 @@ export function RegisterForm({ onSuccess }: RegisterFormProps) {
         <FormField label="Пароль" error={errors.password?.message}>
           <input
             type="password"
-            placeholder="Минимум 6 символов"
+            placeholder="Минимум 8 символов"
             autoComplete="new-password"
             aria-invalid={Boolean(errors.password)}
             className="rv-input"
             {...register('password', {
               required: 'Введите пароль',
               minLength: {
-                value: 6,
-                message: 'Пароль должен быть не короче 6 символов',
+                value: 8,
+                message: 'Пароль должен быть не короче 8 символов',
+              },
+              maxLength: {
+                value: 72,
+                message: 'Пароль должен быть не длиннее 72 символов',
               },
             })}
           />

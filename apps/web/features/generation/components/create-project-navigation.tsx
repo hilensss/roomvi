@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowLeft, ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import type { CreateProjectStep } from '../model/create-project.data';
 

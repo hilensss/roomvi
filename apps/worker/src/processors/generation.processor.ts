@@ -1,13 +1,15 @@
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Injectable, Logger } from '@nestjs/common';
-import { GENERATION_QUEUE_JOBS, GENERATION_QUEUE_NAME } from '@roomvi/shared';
-import { Job } from 'bullmq';
+import {
+  GENERATION_QUEUE_JOBS,
+  GENERATION_QUEUE_NAME,
+  type AnalyzeFloorPlanJobPayload,
+  type GenerationQueuePayload,
+  type ProcessGenerationJobPayload,
+} from '@roomvi/shared';
+import type { Job } from 'bullmq';
 import { GenerationProcessingService } from '../modules/generation-processing/generation-processing.service.js';
 import { FloorPlanAnalysisService } from '../modules/floor-plan-analysis/floor-plan-analysis.service.js';
-
-type GenerationQueuePayload =
-  | { generationJobId: string }
-  | { analysisRunId: string };
 
 const DEFAULT_GENERATION_WORKER_CONCURRENCY = 2;
 const MAX_GENERATION_WORKER_CONCURRENCY = 4;
@@ -41,9 +43,15 @@ export class GenerationProcessor extends WorkerHost {
   }
   async process(job: Job<GenerationQueuePayload>) {
     if (job.name === GENERATION_QUEUE_JOBS.ANALYZE_FLOOR_PLAN) {
-      const analysisRunId = (
-        job.data as { analysisRunId: string }
-      ).analysisRunId;
+      const analysisRunId = getPayloadId(job.data, 'analysisRunId');
+
+      if (!analysisRunId) {
+        this.logger.warn(
+          `Invalid floor-plan analysis payload: bullJobId=${job.id}`,
+        );
+        return;
+      }
+
       this.logger.log(
         `BullMQ floor-plan analysis started: bullJobId=${job.id}, analysisRunId=${analysisRunId}, attempt=${job.attemptsMade + 1}`,
       );
@@ -64,9 +72,13 @@ export class GenerationProcessor extends WorkerHost {
       this.logger.warn(`Unknown job name: ${job.name}`);
       return;
     }
-    const generationJobId = (
-      job.data as { generationJobId: string }
-    ).generationJobId;
+    const generationJobId = getPayloadId(job.data, 'generationJobId');
+
+    if (!generationJobId) {
+      this.logger.warn(`Invalid generation payload: bullJobId=${job.id}`);
+      return;
+    }
+
     this.logger.log(
       `BullMQ generation job started: bullJobId=${job.id}, generationJobId=${generationJobId}, attempt=${job.attemptsMade + 1}`,
     );
@@ -81,4 +93,25 @@ export class GenerationProcessor extends WorkerHost {
 
     return result;
   }
+}
+
+function getPayloadId(
+  payload: GenerationQueuePayload,
+  key: keyof (AnalyzeFloorPlanJobPayload & ProcessGenerationJobPayload),
+) {
+  let value: unknown;
+
+  if (key === 'analysisRunId' && 'analysisRunId' in payload) {
+    value = payload.analysisRunId;
+  }
+
+  if (key === 'generationJobId' && 'generationJobId' in payload) {
+    value = payload.generationJobId;
+  }
+
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  return value.trim() || null;
 }

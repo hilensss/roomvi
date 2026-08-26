@@ -6,6 +6,7 @@ import { BriefcaseBusiness, ShieldCheck, ShoppingCart, User } from 'lucide-react
 import { useState } from 'react';
 import { useCurrentUserQuery } from '@/features/auth/api/auth-queries';
 import { AuthModal } from '@/features/auth/components/auth-modal';
+import { useLocale } from '@/shared/providers/locale-provider';
 
 const navItems = [
   { href: '/', label: 'Как это работает' },
@@ -15,6 +16,7 @@ const navItems = [
 
 export function Header() {
   const [authOpen, setAuthOpen] = useState(false);
+  const { locale, setLocale } = useLocale();
   const currentUserQuery = useCurrentUserQuery();
   const user = currentUserQuery.data;
 
@@ -49,6 +51,38 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-3">
+          <div
+            className="flex h-9 items-center rounded-pill border border-line/70 bg-white p-0.5 text-[11px] font-semibold sm:h-10 sm:text-xs"
+            data-no-i18n
+            role="group"
+            aria-label="Language"
+          >
+            <button
+              type="button"
+              onClick={() => setLocale('en')}
+              aria-pressed={locale === 'en'}
+              className={`h-full rounded-pill px-2.5 transition sm:px-3 ${
+                locale === 'en'
+                  ? 'bg-dark text-white shadow-sm'
+                  : 'text-ink-soft hover:text-brand'
+              }`}
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocale('ru')}
+              aria-pressed={locale === 'ru'}
+              className={`h-full rounded-pill px-2.5 transition sm:px-3 ${
+                locale === 'ru'
+                  ? 'bg-dark text-white shadow-sm'
+                  : 'text-ink-soft hover:text-brand'
+              }`}
+            >
+              RU
+            </button>
+          </div>
+
           {user?.role === 'MANAGER' || user?.role === 'ADMIN' ? (
             <Link
               href="/manager/projects"

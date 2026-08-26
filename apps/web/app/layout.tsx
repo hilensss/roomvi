@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 import { QueryProvider } from '@/shared/providers/query-provider';
+import { LocaleProvider } from '@/shared/providers/locale-provider';
 
 export const metadata: Metadata = {
   title: 'Roomvi',
@@ -12,9 +13,11 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ru">
+    <html lang="ru" suppressHydrationWarning>
       <body>
-        <QueryProvider>{children}</QueryProvider>
+        <LocaleProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

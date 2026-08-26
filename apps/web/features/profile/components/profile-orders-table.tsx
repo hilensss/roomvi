@@ -2,6 +2,8 @@ import { CheckCircle2, Clock, Package, Truck } from 'lucide-react';
 import type { Order } from '@/shared/api/types';
 import { formatMoney } from '@/features/catalog/lib/catalog.helpers';
 import { cn } from '@/shared/lib/cn';
+import { formatDate } from '@/shared/i18n/locale';
+import { useLocale } from '@/shared/providers/locale-provider';
 
 type ProfileOrdersTableProps = {
   orders: Order[];
@@ -46,6 +48,8 @@ const statusMap = {
 } as const;
 
 export function ProfileOrdersTable({ orders }: ProfileOrdersTableProps) {
+  const { locale } = useLocale();
+
   if (orders.length === 0) {
     return (
       <div className="rounded-card border border-line/60 p-10 text-center">
@@ -98,7 +102,7 @@ export function ProfileOrdersTable({ orders }: ProfileOrdersTableProps) {
                 <div className="mb-1 text-[10px] uppercase tracking-[0.2em] md:hidden">
                   Дата
                 </div>
-                {formatDate(order.createdAt)}
+                {formatDate(order.createdAt, locale)}
               </div>
 
               <div className="col-span-2 text-sm md:col-span-4">
@@ -137,12 +141,4 @@ export function ProfileOrdersTable({ orders }: ProfileOrdersTableProps) {
       </div>
     </div>
   );
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(value));
 }

@@ -76,13 +76,12 @@ export class CartService {
     const product = await this.getActiveProduct(productId);
     const cart = await this.getOrCreateActiveCart(owner);
 
-    const existingItem = await this.prisma.cartItem.findFirst({
+    const existingItem = await this.prisma.cartItem.findUnique({
       where: {
-        cartId: cart.id,
-        productId: product.id,
-        source: CartItemSource.CATALOG,
-        roomProjectId: null,
-        designVariantId: null,
+        cartId_productId: {
+          cartId: cart.id,
+          productId: product.id,
+        },
       },
     });
 
@@ -166,13 +165,12 @@ export class CartService {
         continue;
       }
 
-      const existingItem = await this.prisma.cartItem.findFirst({
+      const existingItem = await this.prisma.cartItem.findUnique({
         where: {
-          cartId: cart.id,
-          productId: product.id,
-          source: CartItemSource.DESIGN_PROJECT,
-          roomProjectId: designVariant.roomProjectId,
-          designVariantId: designVariant.id,
+          cartId_productId: {
+            cartId: cart.id,
+            productId: product.id,
+          },
         },
       });
 
@@ -189,6 +187,9 @@ export class CartService {
             titleSnapshot: product.title,
             imageSnapshot: product.imageUrls[0] ?? null,
             availabilitySnapshot: product.stockStatus,
+            source: CartItemSource.DESIGN_PROJECT,
+            roomProjectId: designVariant.roomProjectId,
+            designVariantId: designVariant.id,
           },
         });
       } else {
@@ -504,7 +505,7 @@ export class CartService {
       throw new NotFoundException('Cart not found');
     }
 
-    const totalAmount = cart.items.reduce((sum: number, item: any) => {
+    const totalAmount = cart.items.reduce((sum, item) => {
       if (
         !item.product.isActive ||
         item.product.stockStatus !== StockStatus.IN_STOCK

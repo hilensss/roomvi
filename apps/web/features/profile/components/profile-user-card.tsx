@@ -1,5 +1,7 @@
 import { Mail, MapPin, Phone } from 'lucide-react';
 import type { AuthUser } from '@/shared/api/types';
+import { formatNumber } from '@/shared/i18n/locale';
+import { useLocale } from '@/shared/providers/locale-provider';
 
 type ProfileUserCardProps = {
   user: AuthUser;
@@ -14,6 +16,7 @@ export function ProfileUserCard({
   ordersCount,
   bonuses,
 }: ProfileUserCardProps) {
+  const { locale } = useLocale();
   const displayName = user.name || user.email;
   const initial = displayName[0]?.toUpperCase() ?? 'R';
 
@@ -42,9 +45,9 @@ export function ProfileUserCard({
         </div>
 
         <div className="mt-6 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
-          <Stat label="Проектов" value={projectsCount} />
-          <Stat label="Заказов" value={ordersCount} />
-          <Stat label="Бонусы" value={bonuses} />
+          <Stat label="Проектов" value={projectsCount} locale={locale} />
+          <Stat label="Заказов" value={ordersCount} locale={locale} />
+          <Stat label="Бонусы" value={bonuses} locale={locale} />
         </div>
       </div>
     </div>
@@ -66,14 +69,22 @@ function InfoRow({
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  locale,
+}: {
+  label: string;
+  value: number;
+  locale: 'ru' | 'en';
+}) {
   return (
     <div>
       <div className="mb-1 text-xs uppercase tracking-[0.2em] text-line">
         {label}
       </div>
       <div className="text-2xl font-semibold">
-        {new Intl.NumberFormat('ru-RU').format(value)}
+        {formatNumber(value, locale)}
       </div>
     </div>
   );

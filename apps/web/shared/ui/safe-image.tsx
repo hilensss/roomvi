@@ -8,10 +8,11 @@ function shouldUseUnoptimized(src: ImageProps['src']) {
   return src.includes('placehold.co');
 }
 
-export function SafeImage(props: ImageProps) {
+export function SafeImage({ alt, ...props }: ImageProps) {
   return (
     <Image
       {...props}
+      alt={alt}
       unoptimized={props.unoptimized ?? shouldUseUnoptimized(props.src)}
     />
   );

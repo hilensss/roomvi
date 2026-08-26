@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { CheckCircle, ChevronRight } from 'lucide-react';
 import type { DesignVariant, GenerationJob } from '@/shared/api/types';

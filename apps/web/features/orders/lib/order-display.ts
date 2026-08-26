@@ -58,7 +58,12 @@ export const procurementStatusMeta = {
 } satisfies Record<OrderItemProcurementStatus, StatusMeta>;
 
 export function formatOrderDate(value: string) {
-  return new Intl.DateTimeFormat('ru-RU', {
+  const locale =
+    typeof document !== 'undefined' && document.documentElement.lang === 'en'
+      ? 'en-US'
+      : 'ru-RU';
+
+  return new Intl.DateTimeFormat(locale, {
     day: '2-digit',
     month: 'long',
     year: 'numeric',
