@@ -95,9 +95,6 @@ services:
         NEXT_PUBLIC_BASE_PATH: /release
     restart: unless-stopped
     init: true
-    depends_on:
-      api:
-        condition: service_healthy
     healthcheck:
       test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost:3000/release']
       interval: 10s

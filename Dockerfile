@@ -36,9 +36,17 @@ FROM packages-build AS api-build
 
 RUN npm run build -w api
 
+FROM api-build AS api-production
+
+RUN npm prune --omit=dev
+
 FROM packages-build AS worker-build
 
 RUN npm run build -w worker
+
+FROM worker-build AS worker-production
+
+RUN npm prune --omit=dev
 
 FROM packages-build AS web-build
 
@@ -50,23 +58,19 @@ ENV NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH}
 
 RUN npm run build -w web
 
-FROM packages-build AS production-dependencies
-
-RUN npm prune --omit=dev
-
 FROM base AS api
 
 ENV NODE_ENV=production
 ENV API_PORT=4000
 
-COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=api-build /app/apps/api/package.json ./apps/api/package.json
-COPY --from=api-build /app/apps/api/dist ./apps/api/dist
-COPY --from=api-build /app/packages/database/package.json ./packages/database/package.json
-COPY --from=api-build /app/packages/database/dist ./packages/database/dist
-COPY --from=api-build /app/packages/database/generated ./packages/database/generated
-COPY --from=api-build /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=api-build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=api-production /app/node_modules ./node_modules
+COPY --from=api-production /app/apps/api/package.json ./apps/api/package.json
+COPY --from=api-production /app/apps/api/dist ./apps/api/dist
+COPY --from=api-production /app/packages/database/package.json ./packages/database/package.json
+COPY --from=api-production /app/packages/database/dist ./packages/database/dist
+COPY --from=api-production /app/packages/database/generated ./packages/database/generated
+COPY --from=api-production /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=api-production /app/packages/shared/dist ./packages/shared/dist
 
 USER node
 EXPOSE 4000
@@ -77,14 +81,14 @@ FROM base AS worker
 
 ENV NODE_ENV=production
 
-COPY --from=production-dependencies /app/node_modules ./node_modules
-COPY --from=worker-build /app/apps/worker/package.json ./apps/worker/package.json
-COPY --from=worker-build /app/apps/worker/dist ./apps/worker/dist
-COPY --from=worker-build /app/packages/database/package.json ./packages/database/package.json
-COPY --from=worker-build /app/packages/database/dist ./packages/database/dist
-COPY --from=worker-build /app/packages/database/generated ./packages/database/generated
-COPY --from=worker-build /app/packages/shared/package.json ./packages/shared/package.json
-COPY --from=worker-build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=worker-production /app/node_modules ./node_modules
+COPY --from=worker-production /app/apps/worker/package.json ./apps/worker/package.json
+COPY --from=worker-production /app/apps/worker/dist ./apps/worker/dist
+COPY --from=worker-production /app/packages/database/package.json ./packages/database/package.json
+COPY --from=worker-production /app/packages/database/dist ./packages/database/dist
+COPY --from=worker-production /app/packages/database/generated ./packages/database/generated
+COPY --from=worker-production /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=worker-production /app/packages/shared/dist ./packages/shared/dist
 
 USER node
 
