@@ -24,7 +24,30 @@ COPY packages/shared/package.json packages/shared/package.json
 
 RUN nice -n 10 npm ci --no-audit --no-fund
 
-COPY . .
+COPY tsconfig.base.json ./
+COPY packages/shared packages/shared
+COPY packages/database packages/database
+
+RUN DATABASE_URL=postgresql://roomvi:roomvi@localhost:5432/roomvi \
+  nice -n 10 ./node_modules/.bin/prisma generate \
+  --schema=packages/database/prisma/schema.prisma
+
+RUN nice -n 10 npm run build -w @roomvi/shared \
+  && nice -n 10 npm run build -w @roomvi/database
+
+COPY apps/api apps/api
+
+RUN nice -n 10 ./node_modules/.bin/tsc \
+  -p apps/api/tsconfig.json \
+  --noCheck
+
+COPY apps/worker apps/worker
+
+RUN nice -n 10 ./node_modules/.bin/tsc \
+  -p apps/worker/tsconfig.json \
+  --noCheck
+
+COPY apps/web apps/web
 
 ARG NEXT_PUBLIC_API_URL=/release/api
 ARG NEXT_PUBLIC_BASE_PATH=/release
@@ -36,15 +59,9 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
   NEXT_PUBLIC_RUB_PER_USD=${NEXT_PUBLIC_RUB_PER_USD} \
   NEXT_PUBLIC_USD_BUDGET_STEP=${NEXT_PUBLIC_USD_BUDGET_STEP}
 
-RUN DATABASE_URL=postgresql://roomvi:roomvi@localhost:5432/roomvi \
-  nice -n 10 ./node_modules/.bin/prisma generate \
-  --schema=packages/database/prisma/schema.prisma \
-  && nice -n 10 npm run build -w @roomvi/shared \
-  && nice -n 10 npm run build -w @roomvi/database \
-  && nice -n 10 npm run build -w api \
-  && nice -n 10 npm run build -w worker \
-  && nice -n 10 npm run build -w web \
-  && nice -n 10 npm prune --omit=dev --no-audit --no-fund
+RUN nice -n 10 npm run build -w web
+
+RUN nice -n 10 npm prune --omit=dev --no-audit --no-fund
 
 FROM base AS production
 
