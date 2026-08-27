@@ -67,7 +67,7 @@ export const previewGalleryItems = [
 export const comparisonRows = [
   {
     bad: 'Дизайнер за 80 000 ₽ и 3 недели',
-    good: 'Готовый проект за 2 минуты — бесплатно',
+    good: 'Готовый проект за 3 минуты — бесплатно',
   },
   {
     bad: 'Картинки из Pinterest, которые не купить',

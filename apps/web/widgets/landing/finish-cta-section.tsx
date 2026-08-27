@@ -31,7 +31,7 @@ export function FinishCTASection() {
 
               <div className="flex items-center gap-3 px-2">
                 <CheckCircle className="size-5 text-brand" />
-                <span className="text-sm text-white">2 минуты — и готово</span>
+                <span className="text-sm text-white">3 минуты — и готово</span>
               </div>
             </div>
           </div>

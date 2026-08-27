@@ -17,6 +17,15 @@ describe('translateRussianText', () => {
     expect(translateRussianText('156 000 ₽')).toBe('$1,733');
   });
 
+  it('translates the landing generation time', () => {
+    expect(translateRussianText('Готовый проект за 3 минуты — бесплатно')).toBe(
+      'A finished project in 3 minutes — free',
+    );
+    expect(translateRussianText('3 минуты — и готово')).toBe(
+      'Ready in 3 minutes',
+    );
+  });
+
   it('translates dynamic generation progress as real English', () => {
     expect(
       translateRussianText(
