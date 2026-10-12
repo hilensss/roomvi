@@ -1,5 +1,4 @@
-.git
-.github
+.*
 .next
 **/.next
 .turbo
@@ -19,7 +18,6 @@ coverage
 !.env.example
 !.env.production.example
 packages/database/generated
-graphify-out
-.superpowers
 docs
+**/*.md
 **/*.zip
