@@ -1,5 +1,7 @@
 # Roomvi
 
+**Русский** · [English](README.en.md)
+
 Roomvi — платформа для создания интерьеров на основе реальных товаров мебельных поставщиков. Пользователь задаёт параметры комнаты, стиль и бюджет, получает варианты дизайна и может перейти от визуализации к выбору мебели и оформлению заказа.
 
 Для работы с партнёрами предусмотрен внутренний B2B-кабинет: визуализация мебельных линеек и интерьеров по планировкам застройщиков.
@@ -13,7 +15,19 @@ Roomvi — платформа для создания интерьеров на 
 - **B2B: мебельные линейки.** Проекты партнёров, выбор товаров из каталога, генерация и скачивание визуализаций.
 - **B2B: застройщики.** Загрузка растровой планировки, анализ помещений, проверка геометрии менеджером и генерация интерьеров комнат.
 
-Проект находится в активной разработке. В кодовой базе реализованы основные пользовательские сценарии и B2B-процессы; промышленная синхронизация с поставщиками, эквайринг и логистика остаются направлениями дальнейшего развития.
+**Статус: проект закрыт, активная разработка прекращена.** Репозиторий сохраняет последнюю реализацию платформы. Промышленная синхронизация с поставщиками, эквайринг и логистика не были завершены.
+
+## Интерфейс
+
+Скриншоты работающего локального приложения. Каталог использует встроенные демонстрационные данные; дизайн и B2B-проект подготовлены для показа интерфейса. Изображение интерьера на экране дизайна — демонстрационный референс, а не результат нового вызова генерации.
+
+![Главная страница Roomvi](assets/screenshots/01-landing.png)
+
+| Создание интерьера: выбор стиля и бриф | Каталог мебели: поиск, фильтры и товары |
+| --- | --- |
+| [![Мастер создания интерьера](assets/screenshots/02-design-wizard.png)](assets/screenshots/02-design-wizard.png) | [![Каталог мебели](assets/screenshots/03-catalog.png)](assets/screenshots/03-catalog.png) |
+| **Дизайн: интерьер, товары и стоимость** | **B2B: проект партнёра и ручная подборка** |
+| [![Дизайн с подборкой мебели](assets/screenshots/04-design-details.png)](assets/screenshots/04-design-details.png) | [![B2B-кабинет менеджера](assets/screenshots/05-b2b-workspace.png)](assets/screenshots/05-b2b-workspace.png) |
 
 ## Технологии
 
@@ -31,11 +45,24 @@ Roomvi — платформа для создания интерьеров на 
 
 ## Архитектура
 
-```text
-Next.js → NestJS API → PostgreSQL
-              │
-              └→ Redis / BullMQ → Worker → провайдер генерации
-                       API и Worker → S3-хранилище
+```mermaid
+flowchart LR
+    Web["Web · Next.js / React"] -->|REST, cookies, polling| API["API · NestJS"]
+    API --> DB[("PostgreSQL · Prisma")]
+    API -->|Enqueue jobs| Queue[("Redis · BullMQ")]
+    Queue -->|Process jobs| Worker["Worker · NestJS"]
+    Worker -->|Save results and progress| DB
+    API -->|Uploads and protected downloads| Storage[("S3-compatible storage")]
+    Worker -->|References and generated images| Storage
+    Worker --> Generation["Image generation · YES AI / Nano Banana"]
+    Worker --> Reasoning["Floor-plan analysis · reasoning provider"]
+
+    classDef app fill:#fff3ec,stroke:#f48455,color:#2e3142
+    classDef data fill:#f4f5f7,stroke:#687186,color:#2e3142
+    classDef external fill:#eef7f2,stroke:#63a382,color:#2e3142
+    class Web,API,Worker app
+    class DB,Queue,Storage data
+    class Generation,Reasoning external
 ```
 
 API отвечает за бизнес-логику, права доступа и постановку задач в очередь. Отдельный worker обрабатывает генерацию, анализ планировок и сохранение результатов. Frontend взаимодействует с API через общий типизированный клиент.
